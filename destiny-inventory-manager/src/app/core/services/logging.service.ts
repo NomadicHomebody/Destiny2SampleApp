@@ -1,10 +1,12 @@
-import { Injectable, Inject, PLATFORM_ID } from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
+import { Injectable, Inject, PLATFORM_ID, Optional } from '@angular/core';
+import { isPlatformBrowser, isPlatformServer } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
-import { Observable, forkJoin, of } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { Observable, forkJoin, of, Subject, fromEvent } from 'rxjs';
+import { catchError, filter, takeUntil, tap } from 'rxjs/operators';
+import { DOCUMENT } from '@angular/common';
+import * as pako from 'pako';
 
 export enum LogLevel {
   DEBUG = 'DEBUG',
@@ -38,6 +40,7 @@ export interface LogEntry {
     appVersion?: string;
     deviceInfo?: string;
   };
+  filters?: Record<string, any>;
 }
 
 interface LogEmitterConfig {
@@ -48,10 +51,24 @@ interface LogEmitterConfig {
 
 interface FileLogConfig {
   enabled: boolean;
-  path?: string;
+  basePath?: string;
+  folderNamePrefix?: string;
   maxSize?: number;
   maxFiles?: number;
   compress?: boolean;
+  rotationPeriod?: 'hourly' | 'daily' | 'weekly';
+  filenamePattern?: string;
+}
+
+interface OfflineConfig {
+  enabled: boolean;
+  maxBufferSize?: number;
+  syncWhenOnline?: boolean;
+}
+
+interface LogFilters {
+  excludeSources?: string[];
+  custom?: Record<string, any>;
 }
 
 // Default log emitter configuration if environment doesn't specify
@@ -59,6 +76,25 @@ const DEFAULT_EMITTERS: LogEmitterConfig = {
   console: true,
   remote: false,
   file: false
+};
+
+// Default file config
+const DEFAULT_FILE_CONFIG: FileLogConfig = {
+  enabled: false,
+  basePath: './data/logs/',
+  folderNamePrefix: 'app-',
+  maxSize: 10 * 1024 * 1024,
+  maxFiles: 5,
+  compress: true,
+  rotationPeriod: 'daily',
+  filenamePattern: '{prefix}log-{date}.json'
+};
+
+// Default offline config
+const DEFAULT_OFFLINE_CONFIG: OfflineConfig = {
+  enabled: false,
+  maxBufferSize: 50,
+  syncWhenOnline: true
 };
 
 @Injectable({
@@ -69,29 +105,64 @@ export class LoggingService {
   private readonly remoteEndpoints: string[] = environment.logging?.remoteEndpoints || [];
   private readonly emitters: LogEmitterConfig;
   private readonly fileConfig: FileLogConfig;
+  private readonly offlineConfig: OfflineConfig;
+  private readonly filters: LogFilters;
   
   // For the in-memory log buffer used for file logging
   private logBuffer: LogEntry[] = [];
   private readonly bufferSize = 100; // Number of logs to buffer before writing to file
   private isWritingToFile = false;
+  
+  // For offline logging
+  private offlineBuffer: LogEntry[] = [];
+  private isOnline = true;
+  private readonly destroy$ = new Subject<void>();
+  
+  // For real-time log subscribers
+  private logStream$ = new Subject<LogEntry>();
 
   constructor(
     private http: HttpClient,
     private router: Router,
-    @Inject(PLATFORM_ID) private platformId: Object
+    @Inject(PLATFORM_ID) private platformId: Object,
+    @Optional() @Inject(DOCUMENT) private document: Document
   ) {
     // Initialize emitter configuration from environment or use defaults
     this.emitters = environment.logging?.emitters || DEFAULT_EMITTERS;
     
     // Initialize file logging config
-    this.fileConfig = environment.logging?.file || { enabled: false };
+    this.fileConfig = { ...DEFAULT_FILE_CONFIG, ...environment.logging?.file };
+    
+    // Initialize offline config
+    this.offlineConfig = { ...DEFAULT_OFFLINE_CONFIG, ...environment.logging?.offline };
+    
+    // Initialize filters
+    this.filters = environment.logging?.filters || {};
+    
+    // Setup online/offline detection
+    if (isPlatformBrowser(this.platformId) && this.offlineConfig.enabled) {
+      this.setupOfflineDetection();
+    }
+    
+    // Register service worker if available and offline logging is enabled
+    if (isPlatformBrowser(this.platformId) && this.offlineConfig.enabled) {
+      this.registerServiceWorker();
+    }
     
     // Log service initialization
     this.info('LoggingService', 'Logging service initialized', {
       emitters: this.emitters,
       fileConfig: this.fileConfig,
-      remoteEndpointsCount: this.remoteEndpoints.length
+      remoteEndpointsCount: this.remoteEndpoints.length,
+      offlineSupport: this.offlineConfig.enabled
     });
+  }
+  
+  /**
+   * Returns an observable that emits log entries as they are created
+   */
+  public getLogStream(): Observable<LogEntry> {
+    return this.logStream$.asObservable();
   }
 
   /**
@@ -111,7 +182,15 @@ export class LoggingService {
       return;
     }
     
+    // Check if source is excluded
+    if (this.filters.excludeSources && this.filters.excludeSources.includes(source)) {
+      return;
+    }
+    
     const logEntry: LogEntry = this.buildLogEntry(level, source, message, error, code, additionalData);
+    
+    // Emit to any subscribers
+    this.logStream$.next(logEntry);
     
     // Send to each enabled emitter
     if (this.emitters.console) {
@@ -119,7 +198,12 @@ export class LoggingService {
     }
     
     if (this.emitters.remote) {
-      this.sendToEndpoints(logEntry);
+      // Only send to remote if we're online
+      if (isPlatformBrowser(this.platformId) && !this.isOnline && this.offlineConfig.enabled) {
+        this.storeForOffline(logEntry);
+      } else {
+        this.sendToEndpoints(logEntry);
+      }
     }
     
     if (this.emitters.file) {
@@ -183,22 +267,160 @@ export class LoggingService {
     
     try {
       const logs = this.getStoredLogs();
-      const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
       
-      // Create download link and trigger it
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
+      if (this.fileConfig.compress) {
+        // Use pako for compression
+        const logText = JSON.stringify(logs);
+        const compressed = pako.gzip(logText);
+        const blob = new Blob([compressed], { type: 'application/gzip' });
+        
+        this.triggerDownload(blob, filename + '.gz');
+      } else {
+        const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+        this.triggerDownload(blob, filename);
+      }
       
-      // Clean up
-      URL.revokeObjectURL(url);
-      
-      this.info('LoggingService', 'Logs exported to file', { filename, logCount: logs.length });
+      this.info('LoggingService', 'Logs exported to file', { 
+        filename, 
+        logCount: logs.length,
+        compressed: this.fileConfig.compress
+      });
     } catch (e) {
       console.error('Failed to export logs:', e);
     }
+  }
+  
+  /**
+   * Force sync any offline logs
+   */
+  public syncOfflineLogs(): void {
+    if (!isPlatformBrowser(this.platformId) || !this.offlineConfig.enabled) return;
+    
+    this.processOfflineBuffer();
+  }
+  
+  /**
+   * Clean up resources when service is destroyed
+   */
+  public ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+    this.logStream$.complete();
+    
+    // Flush any pending logs
+    if (this.logBuffer.length > 0) {
+      this.flushLogBuffer();
+    }
+  }
+  
+  /**
+   * Setup offline detection
+   */
+  private setupOfflineDetection(): void {
+    // Initialize based on current status
+    this.isOnline = navigator.onLine;
+    
+    // Listen for online/offline events
+    fromEvent(window, 'online').pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.isOnline = true;
+      this.debug('LoggingService', 'Application is online');
+      
+      if (this.offlineConfig.syncWhenOnline) {
+        this.processOfflineBuffer();
+      }
+    });
+    
+    fromEvent(window, 'offline').pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.isOnline = false;
+      this.warn('LoggingService', 'Application is offline');
+    });
+  }
+  
+  /**
+   * Register service worker for offline capabilities
+   */
+  private registerServiceWorker(): void {
+    if ('serviceWorker' in navigator) {
+      // Note: In a real application, you would register your service worker here
+      // For this example, we're just checking if it's available
+      this.debug('LoggingService', 'Service Worker is available for offline logging');
+    }
+  }
+  
+  /**
+   * Store log entry for offline processing later
+   */
+  private storeForOffline(logEntry: LogEntry): void {
+    // Add to offline buffer
+    this.offlineBuffer.push(logEntry);
+    
+    // Trim buffer if it exceeds max size
+    const maxSize = this.offlineConfig.maxBufferSize || 50;
+    if (this.offlineBuffer.length > maxSize) {
+      this.offlineBuffer = this.offlineBuffer.slice(-maxSize);
+    }
+    
+    // Store in IndexedDB or localStorage for persistence
+    this.persistOfflineBuffer();
+  }
+  
+  /**
+   * Persist offline buffer to survive page reloads
+   */
+  private persistOfflineBuffer(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    
+    try {
+      localStorage.setItem('offline_logs', JSON.stringify(this.offlineBuffer));
+    } catch (e) {
+      console.error('Failed to persist offline logs:', e);
+    }
+  }
+  
+  /**
+   * Process the offline buffer when back online
+   */
+  private processOfflineBuffer(): void {
+    if (this.offlineBuffer.length === 0) return;
+    
+    this.info('LoggingService', 'Processing offline log buffer', { count: this.offlineBuffer.length });
+    
+    // Process in batches to avoid overwhelming the network
+    const batchSize = 10;
+    const processBatch = () => {
+      const batch = this.offlineBuffer.splice(0, batchSize);
+      
+      if (batch.length === 0) {
+        // All processed
+        this.persistOfflineBuffer();
+        return;
+      }
+      
+      // Process each log in the batch
+      const requests = batch.map(logEntry => 
+        this.sendToEndpoints(logEntry, true)
+      );
+      
+      // Continue with next batch after this one is done
+      forkJoin(requests).subscribe({
+        next: () => {
+          this.persistOfflineBuffer();
+          setTimeout(processBatch, 1000); // Delay to prevent overwhelming the network
+        },
+        error: () => {
+          // Put failed logs back in the buffer
+          this.offlineBuffer = [...batch, ...this.offlineBuffer];
+          this.persistOfflineBuffer();
+        }
+      });
+    };
+    
+    // Start processing
+    processBatch();
   }
   
   /**
@@ -290,6 +512,11 @@ export class LoggingService {
         deviceInfo: this.getDeviceInfo()
       };
     }
+    
+    // Add custom filters
+    if (this.filters.custom) {
+      logEntry.filters = { ...this.filters.custom };
+    }
 
     return logEntry;
   }
@@ -352,10 +579,19 @@ export class LoggingService {
   /**
    * Send logs to multiple remote endpoints
    */
-  private sendToEndpoints(logEntry: LogEntry): void {
+  private sendToEndpoints(logEntry: LogEntry, isRetry: boolean = false): Observable<any> {
     // Only send logs to server from browser environment
     if (!isPlatformBrowser(this.platformId) || this.remoteEndpoints.length === 0) {
-      return;
+      return of(null);
+    }
+    
+    // Add retry information if this is a retry attempt
+    if (isRetry) {
+      logEntry.context = {
+        ...logEntry.context,
+        isRetry: true,
+        retryTimestamp: new Date().toISOString()
+      };
     }
     
     // Create an array of HTTP requests, one for each endpoint
@@ -371,8 +607,10 @@ export class LoggingService {
     
     // Use forkJoin to process all requests in parallel
     if (requests.length > 0) {
-      forkJoin(requests).subscribe();
+      return forkJoin(requests);
     }
+    
+    return of(null);
   }
 
   /**
@@ -433,52 +671,97 @@ export class LoggingService {
       const logsToWrite = [...this.logBuffer];
       this.logBuffer = [];
       
-      // Format logs as JSON
-      const logText = JSON.stringify(logsToWrite, null, 2);
+      // Separate logs by level for level-based files if needed
+      const logsByLevel: Record<LogLevel, LogEntry[]> = {
+        [LogLevel.DEBUG]: [],
+        [LogLevel.INFO]: [],
+        [LogLevel.WARN]: [],
+        [LogLevel.ERROR]: [],
+        [LogLevel.FATAL]: []
+      };
       
-      // In browser environment, we can't directly write to file system
-      // So we'll create a file for download
-      this.saveLogsToFile(logText);
+      // Group logs by level
+      logsToWrite.forEach(log => {
+        logsByLevel[log.level].push(log);
+      });
+      
+      // Get the current date for folder naming
+      const now = new Date();
+      const dateString = this.formatDateForFilename(now);
+      const folderName = `${this.fileConfig.folderNamePrefix || 'app-'}${dateString}`;
+      
+      // In a real Node.js environment, we would create the folder
+      // but in browser we'll simulate this with structured downloads
+      
+      // Create a combined log file with all levels
+      const allLogs = JSON.stringify(logsToWrite, null, 2);
+      
+      // Determine filename based on pattern
+      const filename = this.formatFilename(dateString, 'all');
+      
+      if (this.fileConfig.compress) {
+        // Use pako for compression
+        const compressed = pako.gzip(allLogs);
+        const blob = new Blob([compressed], { type: 'application/gzip' });
+        
+        this.triggerDownload(blob, `${folderName}/${filename}.gz`);
+      } else {
+        const blob = new Blob([allLogs], { type: 'application/json' });
+        this.triggerDownload(blob, `${folderName}/${filename}`);
+      }
+      
+      // Optionally create level-specific files
+      // This would typically be based on configuration
+      // For this example, we'll just create an error log separately
+      if (logsByLevel[LogLevel.ERROR].length > 0 || logsByLevel[LogLevel.FATAL].length > 0) {
+        const errorLogs = JSON.stringify([...logsByLevel[LogLevel.ERROR], ...logsByLevel[LogLevel.FATAL]], null, 2);
+        const errorFilename = this.formatFilename(dateString, 'error');
+        
+        if (this.fileConfig.compress) {
+          const compressed = pako.gzip(errorLogs);
+          const blob = new Blob([compressed], { type: 'application/gzip' });
+          
+          this.triggerDownload(blob, `${folderName}/${errorFilename}.gz`);
+        } else {
+          const blob = new Blob([errorLogs], { type: 'application/json' });
+          this.triggerDownload(blob, `${folderName}/${errorFilename}`);
+        }
+      }
+      
+      this.info('LoggingService', 'Logs saved to file', { 
+        folder: folderName, 
+        count: logsToWrite.length,
+        compressed: this.fileConfig.compress
+      });
     } catch (e) {
       console.error('Failed to write logs to file:', e);
+      // Put logs back in buffer to try again later
+      this.logBuffer = [...this.logBuffer, ...this.logBuffer];
     } finally {
       this.isWritingToFile = false;
     }
   }
   
   /**
-   * Save logs to a file using available browser APIs
+   * Format date for filename
    */
-  private saveLogsToFile(logText: string): void {
-    const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
-    const filename = `app-logs-${timestamp}.json`;
-    
-    if (this.fileConfig.compress) {
-      // If compression is enabled, use the compression library
-      this.saveCompressedLogs(logText, filename);
-    } else {
-      // Otherwise save as regular JSON
-      const blob = new Blob([logText], { type: 'application/json' });
-      this.triggerDownload(blob, filename);
-    }
+  private formatDateForFilename(date: Date): string {
+    return date.toISOString().slice(0, 10); // YYYY-MM-DD
   }
   
   /**
-   * Save compressed logs
+   * Format filename based on pattern
    */
-  private saveCompressedLogs(logText: string, filename: string): void {
-    // In a real implementation, you would use a library like pako for compression
-    // For this example, we're simulating compression by just saving the file
+  private formatFilename(dateStr: string, level: string): string {
+    let filename = this.fileConfig.filenamePattern || '{prefix}log-{date}-{level}.json';
     
-    // Note: To actually implement compression, you'd add:
-    // import * as pako from 'pako';
-    // const compressed = pako.gzip(logText);
-    // const blob = new Blob([compressed], { type: 'application/gzip' });
-    
-    // Simulate compression for this example
-    console.log('Compressing logs (simulated)');
-    const blob = new Blob([logText], { type: 'application/json' });
-    this.triggerDownload(blob, filename + '.gz');
+    // Replace placeholders
+    filename = filename
+      .replace('{prefix}', this.fileConfig.folderNamePrefix || 'app-')
+      .replace('{date}', dateStr)
+      .replace('{level}', level);
+      
+    return filename;
   }
   
   /**
@@ -497,15 +780,10 @@ export class LoggingService {
     a.click();
     
     // Clean up
-    URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-    
-    this.consoleLog({
-      timestamp: new Date().toISOString(),
-      level: LogLevel.INFO,
-      source: 'LoggingService',
-      message: `Logs saved to file: ${filename}`
-    });
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    }, 100);
   }
 
   /**
