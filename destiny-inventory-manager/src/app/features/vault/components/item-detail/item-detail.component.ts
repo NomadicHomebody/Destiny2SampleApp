@@ -2,11 +2,13 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { VaultService } from '../../services/vault.service';
 import { DestinyItem } from '../../models/vault.models';
+import { CommonModule } from '@angular/common';
 
 @Component({
     selector: 'app-item-detail',
     templateUrl: './item-detail.component.html',
-    styleUrls: ['./item-detail.component.css'] // Changed from .scss
+    styleUrls: ['./item-detail.component.css'],
+    imports: [CommonModule]
   })
 export class ItemDetailComponent implements OnInit {
   item: DestinyItem | null = null;

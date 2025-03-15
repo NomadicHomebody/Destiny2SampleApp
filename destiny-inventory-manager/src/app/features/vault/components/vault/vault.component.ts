@@ -1,13 +1,18 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { VaultService } from '../../services/vault.service';
 import { DestinyItem, ItemLocation, VaultFilter } from '../../models/vault.models';
+import { CommonModule } from '@angular/common';
+import { ItemFilterComponent } from '../item-filter/item-filter.component';
 
 @Component({
   selector: 'app-vault',
   templateUrl: './vault.component.html',
-  styleUrls: ['./vault.component.css']
+  styleUrls: ['./vault.component.css'],
+  standalone: true,
+  imports: [CommonModule, ItemFilterComponent]
 })
 export class VaultComponent implements OnInit, OnDestroy {
   vaultItems: DestinyItem[] = [];
@@ -20,7 +25,8 @@ export class VaultComponent implements OnInit, OnDestroy {
 
   constructor(
     private vaultService: VaultService,
-    private router: Router
+    private router: Router,
+    @Inject(PLATFORM_ID) private platformId: Object
   ) {}
 
   ngOnInit(): void {
@@ -37,7 +43,7 @@ export class VaultComponent implements OnInit, OnDestroy {
   }
 
   private isAuthenticated(): boolean {
-    return localStorage.getItem('authToken') !== null;
+    return isPlatformBrowser(this.platformId) && localStorage.getItem('authToken') !== null;
   }
 
   private loadItems(): void {
@@ -122,5 +128,113 @@ export class VaultComponent implements OnInit, OnDestroy {
 
   get characterItemCount(): number {
     return this.getItemsForLocation(ItemLocation.Character).length;
+  }
+
+  transferToVault(item: DestinyItem): void {
+    if (!item || item.location === ItemLocation.Vault) {
+      return;
+    }
+
+    this.isLoading = true;
+    this.error = null;
+
+    this.subscription.add(
+      this.vaultService.transferItem(item, ItemLocation.Character).subscribe({
+        next: (success) => {
+          if (success) {
+            // Update the item's location locally until next refresh
+            const updatedItem = this.vaultItems.find(i => i.itemInstanceId === item.itemInstanceId);
+            if (updatedItem) {
+              updatedItem.location = ItemLocation.Vault;
+            }
+            this.refreshVault(); // Refresh the vault to get updated data
+          } else {
+            this.error = 'Failed to transfer item to vault.';
+          }
+          this.isLoading = false;
+        },
+        error: (err) => {
+          this.error = 'Failed to transfer item to vault. Please try again.';
+          this.isLoading = false;
+          console.error('Error transferring item to vault:', err);
+        }
+      })
+    );
+  }
+
+  transferToCharacter(item: DestinyItem): void {
+    if (!item || item.location === ItemLocation.Character) {
+      return;
+    }
+
+    this.isLoading = true;
+    this.error = null;
+
+    this.subscription.add(
+      this.vaultService.transferItem(item, ItemLocation.Character).subscribe({
+        next: (success) => {
+          if (success) {
+            // Update the item's location locally until next refresh
+            const updatedItem = this.vaultItems.find(i => i.itemInstanceId === item.itemInstanceId);
+            if (updatedItem) {
+              updatedItem.location = ItemLocation.Character;
+              updatedItem.isEquipped = false;
+            }
+            this.refreshVault(); // Refresh the vault to get updated data
+          } else {
+            this.error = 'Failed to transfer item to character.';
+          }
+          this.isLoading = false;
+        },
+        error: (err) => {
+          this.error = 'Failed to transfer item to character. Please try again.';
+          this.isLoading = false;
+          console.error('Error transferring item to character:', err);
+        }
+      })
+    );
+  }
+
+  equipItem(item: DestinyItem): void {
+    if (!item || item.location !== ItemLocation.Character || item.isEquipped || !item.canEquip) {
+      return;
+    }
+
+    this.isLoading = true;
+    this.error = null;
+
+    this.subscription.add(
+      this.vaultService.equipItem(item).subscribe({
+        next: (success) => {
+          if (success) {
+            // Update item status locally
+            const updatedItem = this.vaultItems.find(i => i.itemInstanceId === item.itemInstanceId);
+            if (updatedItem) {
+              updatedItem.isEquipped = true;
+              
+              // Unequip other items of the same type
+              if (updatedItem.bucketHash) {
+                this.vaultItems.forEach(i => {
+                  if (i.itemInstanceId !== item.itemInstanceId && 
+                      i.bucketHash === updatedItem.bucketHash && 
+                      i.isEquipped) {
+                    i.isEquipped = false;
+                  }
+                });
+              }
+            }
+            this.refreshVault(); // Refresh to get complete updated data
+          } else {
+            this.error = 'Failed to equip item.';
+          }
+          this.isLoading = false;
+        },
+        error: (err) => {
+          this.error = 'Failed to equip item. Please try again.';
+          this.isLoading = false;
+          console.error('Error equipping item:', err);
+        }
+      })
+    );
   }
 }

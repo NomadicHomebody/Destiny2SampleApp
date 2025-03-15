@@ -18,11 +18,6 @@ const routes: Routes = [
 ];
 
 @NgModule({
-  declarations: [
-    LoginComponent,
-    CallbackComponent,
-    ProfileComponent
-  ],
   imports: [
     CommonModule,
     FormsModule,

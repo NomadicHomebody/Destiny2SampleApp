@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, catchError, map, tap } from 'rxjs';
 import { DestinyItem, ItemLocation, ItemPerk } from '../models/vault.models';
@@ -17,21 +18,33 @@ export class VaultService {
   private currentMembershipId: string | null = null;
   private currentCharacterId: string | null = null;
 
-  constructor(private http: HttpClient) {
-    this.loadMembershipInfo();
-    if (this.isAuthenticated()) {
-      this.refreshVaultItems();
+  constructor(
+    private http: HttpClient,
+    @Inject(PLATFORM_ID) private platformId: Object
+  ) {
+    if (this.isBrowser()) {
+      this.loadMembershipInfo();
+      if (this.isAuthenticated()) {
+        this.refreshVaultItems();
+      }
     }
   }
 
+  private isBrowser(): boolean {
+    return isPlatformBrowser(this.platformId);
+  }
+
   private loadMembershipInfo(): void {
-    this.currentMembershipType = Number(localStorage.getItem('membershipType'));
-    this.currentMembershipId = localStorage.getItem('membershipId');
-    this.currentCharacterId = localStorage.getItem('characterId');
+    if (this.isBrowser()) {
+      this.currentMembershipType = Number(localStorage.getItem('membershipType'));
+      this.currentMembershipId = localStorage.getItem('membershipId');
+      this.currentCharacterId = localStorage.getItem('characterId');
+    }
   }
 
   private isAuthenticated(): boolean {
-    return localStorage.getItem('authToken') !== null && 
+    return this.isBrowser() && 
+           localStorage.getItem('authToken') !== null && 
            this.currentMembershipId !== null;
   }
 
@@ -175,15 +188,18 @@ export class VaultService {
   }
 
   private getHeaders() {
-    return {
-      headers: {
-        'X-API-Key': this.apiKey,
-        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-      }
+    const headers: any = {
+      'X-API-Key': this.apiKey
     };
+    
+    if (this.isBrowser() && localStorage.getItem('authToken')) {
+      headers['Authorization'] = `Bearer ${localStorage.getItem('authToken')}`;
+    }
+    
+    return { headers };
   }
 
-  public transferItem(item: DestinyItem, characterId: string): Observable<boolean> {
+  public transferItem(item: DestinyItem, characterId: number): Observable<boolean> {
     console.log(`Transferring item ${item.itemInstanceId} to character ${characterId}`);
     return new Observable<boolean>(observer => {
       setTimeout(() => {
@@ -202,4 +218,5 @@ export class VaultService {
       }, 500);
     });
   }
+  
 }

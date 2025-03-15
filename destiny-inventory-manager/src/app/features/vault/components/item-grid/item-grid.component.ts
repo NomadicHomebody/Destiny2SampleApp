@@ -1,11 +1,14 @@
 import { Component, Input } from '@angular/core';
 import { DestinyItem } from '../../models/vault.models';
 import { Router } from '@angular/router';
+import { CommonModule } from '@angular/common';
 
 @Component({
     selector: 'app-item-grid',
     templateUrl: './item-grid.component.html',
-    styleUrls: ['./item-grid.component.css']
+    styleUrls: ['./item-grid.component.css'],
+    standalone: true,
+    imports: [CommonModule]
   })
 export class ItemGridComponent {
   @Input() items: DestinyItem[] | null = [];

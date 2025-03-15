@@ -1,12 +1,16 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, Inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../../environments/environment';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-callback',
   templateUrl: './callback.component.html',
-  styleUrls: ['./callback.component.css']
+  styleUrls: ['./callback.component.css'],
+  standalone: true,
+  imports: [CommonModule]
 })
 export class CallbackComponent implements OnInit {
   error: string | null = null;
@@ -15,7 +19,8 @@ export class CallbackComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private http: HttpClient
+    private http: HttpClient,
+    @Inject(PLATFORM_ID) private platformId: Object
   ) {}
 
   ngOnInit(): void {
@@ -52,10 +57,12 @@ export class CallbackComponent implements OnInit {
     this.http.post<any>(`${environment.bungie.apiRoot}/App/OAuth/Token/`, tokenRequest)
       .subscribe({
         next: (response) => {
-          // Store tokens
-          localStorage.setItem('authToken', response.access_token);
-          localStorage.setItem('refreshToken', response.refresh_token);
-          localStorage.setItem('tokenExpiry', (Date.now() + (response.expires_in * 1000)).toString());
+          if (isPlatformBrowser(this.platformId)) {
+            // Store tokens only in browser environment
+            localStorage.setItem('authToken', response.access_token);
+            localStorage.setItem('refreshToken', response.refresh_token);
+            localStorage.setItem('tokenExpiry', (Date.now() + (response.expires_in * 1000)).toString());
+          }
           
           // Redirect to vault or profile
           this.router.navigate(['/vault']);

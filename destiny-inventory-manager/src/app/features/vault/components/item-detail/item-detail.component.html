@@ -6,16 +6,8 @@
 </div>
 <div class="item-detail-container" *ngIf="!loading && !error && item">
   <div class="item-header">
-    <img [src]="'https://www.bungie.net' + item.icon" alt="{{ item.name }}">
-    <h1>{{ item.name }}</h1>
-    <p>{{ item.description }}</p>
-  </div>
-  <div class="item-stats">
-    <h2>Stats</h2>
-    <ul>
-      <li *ngFor="let stat of item.stats">
-        {{ stat.name }}: {{ stat.value }}
-      </li>
-    </ul>
+    <img [src]="'https://www.bungie.net' + item.displayProperties.icon" alt="{{ item.displayProperties.name }}">
+    <h1>{{ item.displayProperties.name }}</h1>
+    <p>{{ item.displayProperties.description }}</p>
   </div>
 </div>

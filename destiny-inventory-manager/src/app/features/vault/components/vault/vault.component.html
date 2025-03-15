@@ -86,17 +86,6 @@
         {{ selectedItem.displayProperties.description }}
       </div>
 
-      <div class="item-stats" *ngIf="selectedItem.statValues && Object.keys(selectedItem.statValues).length > 0">
-        <h4>Stats</h4>
-        <div class="stat-row" *ngFor="let stat of getSortedStats(selectedItem.statValues)">
-          <span class="stat-name">{{ getStatName(stat.hash) }}</span>
-          <div class="stat-bar-container">
-            <div class="stat-bar" [style.width.%]="(stat.value / 100) * 100"></div>
-          </div>
-          <span class="stat-value">{{ stat.value }}</span>
-        </div>
-      </div>
-
       <div class="item-perks" *ngIf="selectedItem.perks && selectedItem.perks.length > 0">
         <h4>Perks</h4>
         <div class="perk-grid">

@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
@@ -16,14 +17,23 @@ export class AuthService {
 
   constructor(
     private http: HttpClient,
-    private router: Router
+    private router: Router,
+    @Inject(PLATFORM_ID) private platformId: Object
   ) {
-    this.checkStoredToken();
+    if (this.isBrowser()) {
+      this.checkStoredToken();
+    }
+  }
+
+  private isBrowser(): boolean {
+    return isPlatformBrowser(this.platformId);
   }
 
   public login(): void {
-    const authUrl = `${environment.bungie.authUrl}?client_id=${environment.bungie.clientId}&response_type=code&redirect_uri=${encodeURIComponent(environment.bungie.redirectUrl)}`;
-    window.location.href = authUrl;
+    if (this.isBrowser()) {
+      const authUrl = `${environment.bungie.authUrl}?client_id=${environment.bungie.clientId}&response_type=code&redirect_uri=${encodeURIComponent(environment.bungie.redirectUrl)}`;
+      window.location.href = authUrl;
+    }
   }
 
   public handleCallback(code: string): Observable<boolean> {
@@ -49,7 +59,9 @@ export class AuthService {
   }
 
   public logout(): void {
-    localStorage.removeItem('authToken');
+    if (this.isBrowser()) {
+      localStorage.removeItem('authToken');
+    }
     this.currentUserSubject.next(null);
     if (this.tokenExpirationTimer) {
       clearTimeout(this.tokenExpirationTimer);
@@ -58,7 +70,9 @@ export class AuthService {
   }
 
   private storeToken(token: AuthToken): void {
-    localStorage.setItem('authToken', JSON.stringify(token));
+    if (this.isBrowser()) {
+      localStorage.setItem('authToken', JSON.stringify(token));
+    }
     this.getUserProfile().subscribe(user => {
       this.currentUserSubject.next(user);
       const expiresIn = token.expires_in * 1000;
@@ -73,27 +87,32 @@ export class AuthService {
   }
 
   private checkStoredToken(): void {
-    const authData = localStorage.getItem('authToken');
-    if (!authData) return;
+    if (this.isBrowser()) {
+      const authData = localStorage.getItem('authToken');
+      if (!authData) return;
 
-    const token: AuthToken = JSON.parse(authData);
-    const now = new Date();
-    const expirationDate = new Date(now.getTime() + token.expires_in * 1000);
+      const token: AuthToken = JSON.parse(authData);
+      const now = new Date();
+      const expirationDate = new Date(now.getTime() + token.expires_in * 1000);
 
-    if (expirationDate <= now) {
-      this.logout();
-      return;
+      if (expirationDate <= now) {
+        this.logout();
+        return;
+      }
+
+      this.getUserProfile().subscribe();
     }
-
-    this.getUserProfile().subscribe();
   }
 
   private getToken(): string {
-    const authData = localStorage.getItem('authToken');
-    if (!authData) return '';
-    
-    const token: AuthToken = JSON.parse(authData);
-    return token.access_token;
+    if (this.isBrowser()) {
+      const authData = localStorage.getItem('authToken');
+      if (authData) {
+        const token: AuthToken = JSON.parse(authData);
+        return token.access_token;
+      }
+    }
+    return '';
   }
 
   private getUserProfile(): Observable<BungieUser> {
