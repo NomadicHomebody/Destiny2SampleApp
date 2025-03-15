@@ -4,10 +4,10 @@ import { VaultService } from '../../services/vault.service';
 import { DestinyItem } from '../../models/vault.models';
 
 @Component({
-  selector: 'app-item-detail',
-  templateUrl: './item-detail.component.html',
-  styleUrls: ['./item-detail.component.scss']
-})
+    selector: 'app-item-detail',
+    templateUrl: './item-detail.component.html',
+    styleUrls: ['./item-detail.component.css'] // Changed from .scss
+  })
 export class ItemDetailComponent implements OnInit {
   item: DestinyItem | null = null;
   loading = true;

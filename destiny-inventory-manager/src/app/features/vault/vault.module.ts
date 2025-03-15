@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Routes } from '@angular/router';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms'; // Added ReactiveFormsModule
 
 // Import components
 import { VaultComponent } from './components/vault/vault.component';
@@ -25,6 +25,7 @@ const routes: Routes = [
   imports: [
     CommonModule,
     FormsModule,
+    ReactiveFormsModule, // Added this import
     RouterModule.forChild(routes)
   ],
   exports: [

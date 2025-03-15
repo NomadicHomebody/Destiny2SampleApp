@@ -3,10 +3,10 @@ import { DestinyItem } from '../../models/vault.models';
 import { Router } from '@angular/router';
 
 @Component({
-  selector: 'app-item-grid',
-  templateUrl: './item-grid.component.html',
-  styleUrls: ['./item-grid.component.scss']
-})
+    selector: 'app-item-grid',
+    templateUrl: './item-grid.component.html',
+    styleUrls: ['./item-grid.component.css']
+  })
 export class ItemGridComponent {
   @Input() items: DestinyItem[] | null = [];
 
