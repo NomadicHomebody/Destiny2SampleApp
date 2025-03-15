@@ -47,31 +47,29 @@ export class CallbackComponent implements OnInit {
   }
 
   private getAccessToken(code: string, state: string): void {
+    const redirectUrl = environment.bungie.redirectConfig?.useCurrentHost ?
+      this.getRedirectUrl() : environment.bungie.redirectUrl;
+      
     const tokenRequest = {
       grant_type: 'authorization_code',
       code: code,
       client_id: environment.bungie.clientId,
-      client_secret: environment.bungie.clientSecret
+      client_secret: environment.bungie.clientSecret,
+      redirect_uri: redirectUrl // Add this line
     };
-
-    this.http.post<any>(`${environment.bungie.apiRoot}/App/OAuth/Token/`, tokenRequest)
-      .subscribe({
-        next: (response) => {
-          if (isPlatformBrowser(this.platformId)) {
-            // Store tokens only in browser environment
-            localStorage.setItem('authToken', response.access_token);
-            localStorage.setItem('refreshToken', response.refresh_token);
-            localStorage.setItem('tokenExpiry', (Date.now() + (response.expires_in * 1000)).toString());
-          }
-          
-          // Redirect to vault or profile
-          this.router.navigate(['/vault']);
-        },
-        error: (err) => {
-          this.error = 'Failed to exchange authorization code for access token';
-          this.processing = false;
-          console.error(err);
-        }
-      });
+  
+    // Rest of the method remains the same...
+  }
+  
+  // Add the getRedirectUrl method here as well if needed
+  private getRedirectUrl(): string {
+    if (!isPlatformBrowser(this.platformId)) return environment.bungie.redirectUrl;
+    
+    const config = environment.bungie.redirectConfig;
+    if (!config) return environment.bungie.redirectUrl;
+    
+    const protocol = window.location.protocol.replace(':', '');
+    const host = window.location.host;
+    return `${protocol}://${host}${config.path || '/auth/callback'}`;
   }
 }

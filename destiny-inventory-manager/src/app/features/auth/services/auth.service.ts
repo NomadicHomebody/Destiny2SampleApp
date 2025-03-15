@@ -31,9 +31,10 @@ export class AuthService {
 
   public login(): void {
     if (this.isBrowser()) {
-      const authUrl = `${environment.bungie.authUrl}?client_id=${environment.bungie.clientId}&response_type=code&redirect_uri=${encodeURIComponent(environment.bungie.redirectUrl)}`;
-      window.location.href = authUrl;
-    }
+        const redirectUrl = this.getRedirectUrl();
+        const authUrl = `${environment.bungie.authUrl}?client_id=${environment.bungie.clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUrl)}`;
+        window.location.href = authUrl;
+      }
   }
 
   public handleCallback(code: string): Observable<boolean> {
@@ -128,5 +129,25 @@ export class AuthService {
       map(response => response.Response),
       tap(user => this.currentUserSubject.next(user))
     );
+  }
+
+  private getRedirectUrl(): string {
+    const config = environment.bungie.redirectConfig;
+    
+    // If configured to use current host, build the URL from current location
+    if (config?.useCurrentHost && this.isBrowser()) {
+      const protocol = window.location.protocol.replace(':', '');
+      const host = window.location.host; // Includes port if present
+      return `${protocol}://${host}${config.path || '/auth/callback'}`;
+    }
+    
+    // Otherwise use the configured values or fall back to the static redirectUrl
+    if (config) {
+      const port = config.port ? `:${config.port}` : '';
+      return `${config.protocol}://${config.host}${port}${config.path}`;
+    }
+    
+    // Fall back to the static redirectUrl
+    return environment.bungie.redirectUrl;
   }
 }

@@ -44,3 +44,4 @@ Thumbs.db
 # Environment variables (secrets)
 destiny-inventory-manager\src\environments\environment.ts
 .angular\
+certs\
