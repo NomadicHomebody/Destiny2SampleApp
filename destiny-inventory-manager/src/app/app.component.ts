@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { environment } from '../environments/environment';
-import { LoggingService, LogLevel } from './core/services/logging.service';
+import { LoggingService } from './core/services/logging.service';
 import { DebugConsoleComponent } from './core/components/debug-console/debug-console.component';
 
 @Component({
@@ -13,7 +13,6 @@ import { DebugConsoleComponent } from './core/components/debug-console/debug-con
   imports: [
     CommonModule,
     RouterOutlet,
-    // Always import DebugConsoleComponent, but show/hide with *ngIf
     DebugConsoleComponent
   ]
 })

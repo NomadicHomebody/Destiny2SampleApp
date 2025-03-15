@@ -1,0 +1,64 @@
+/* src/app/core/components/debug-console/components/log-entry-detail/log-entry-detail.component.css */
+.log-details {
+    padding: 0;
+    background-color: #222;
+    border-top: 1px solid #333;
+    font-size: 0.8rem;
+  }
+  
+  .details-tabs {
+    display: flex;
+    background-color: #1a1a1a;
+    border-bottom: 1px solid #333;
+  }
+  
+  .details-tabs button {
+    padding: 0.3rem 0.6rem;
+    background-color: transparent;
+    border: none;
+    color: #aaa;
+    font-size: 0.7rem;
+    cursor: pointer;
+  }
+  
+  .details-tabs button.active {
+    color: #e67e22;
+    background-color: #252525;
+  }
+  
+  .details-tabs button:hover {
+    color: #fff;
+  }
+  
+  .formatted-view, .context-view, .error-view {
+    padding: 0.5rem;
+  }
+  
+  .detail-item {
+    margin-bottom: 0.5rem;
+  }
+  
+  .detail-label {
+    color: #aaa;
+    font-size: 0.75rem;
+    margin-bottom: 0.2rem;
+  }
+  
+  .detail-value {
+    color: #fff;
+  }
+  
+  pre {
+    margin: 0;
+    padding: 0.5rem;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    font-size: 0.75rem;
+    background-color: #1a1a1a;
+    border-radius: 3px;
+  }
+  
+  .stack-trace {
+    white-space: pre-wrap;
+    color: #e74c3c;
+  }

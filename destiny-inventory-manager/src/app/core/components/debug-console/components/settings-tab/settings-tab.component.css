@@ -1,0 +1,86 @@
+/* src/app/core/components/debug-console/components/settings-tab/settings-tab.component.css */
+.settings-info {
+    padding: 1rem;
+    overflow-y: auto;
+    height: 100%;
+  }
+  
+  .settings-info h4 {
+    margin-top: 0;
+    color: #e67e22;
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .settings-section {
+    background-color: #1a1a1a;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+  }
+  
+  .setting-item {
+    display: flex;
+    margin-bottom: 0.75rem;
+  }
+  
+  .setting-label {
+    width: 150px;
+    color: #aaa;
+    font-size: 0.85rem;
+  }
+  
+  .setting-value {
+    flex: 1;
+    color: #fff;
+    font-size: 0.85rem;
+  }
+  
+  .emitters-list {
+    display: flex;
+    gap: 1rem;
+  }
+  
+  .emitter-item {
+    padding: 0.2rem 0.5rem;
+    background-color: #333;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    color: #aaa;
+  }
+  
+  .emitter-item.enabled {
+    color: #fff;
+    background-color: #2c3e50;
+  }
+  
+  .endpoints-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  
+  .endpoints-list li {
+    padding: 0.3rem 0;
+    border-bottom: 1px solid #333;
+    font-size: 0.75rem;
+  }
+  
+  .endpoints-list li:last-child {
+    border-bottom: none;
+  }
+  
+  .sync-button {
+    padding: 0.5rem 1rem;
+    background-color: #f39c12;
+    border: none;
+    border-radius: 3px;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 0.5rem;
+  }
+  
+  .sync-button:hover {
+    background-color: #e67e22;
+  }

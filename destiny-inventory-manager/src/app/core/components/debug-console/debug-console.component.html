@@ -1,0 +1,89 @@
+<!-- src/app/core/components/debug-console/debug-console.component.html -->
+<div class="debug-console" *ngIf="visible">
+    <div class="debug-header">
+      <div class="title-area">
+        <h3>Debug Console</h3>
+        <span class="version-badge">v{{appVersion}}</span>
+      </div>
+      <div class="debug-actions">
+        <button (click)="clearLogs()" class="action-btn clear-btn" title="Clear logs">
+          <span class="icon">🗑️</span>
+        </button>
+        <button (click)="copyLogs()" class="action-btn copy-btn" title="Copy logs">
+          <span class="icon">📋</span>
+        </button>
+        <button (click)="exportLogs()" class="action-btn export-btn" title="Export logs">
+          <span class="icon">📤</span>
+        </button>
+        <button (click)="syncOfflineLogs()" [disabled]="!hasOfflineLogs" 
+                class="action-btn sync-btn" [ngClass]="{'disabled': !hasOfflineLogs}" 
+                title="Sync offline logs">
+          <span class="icon">🔄</span>
+        </button>
+        <button (click)="toggleVisible()" class="action-btn close-btn" title="Close">
+          <span class="icon">✖️</span>
+        </button>
+      </div>
+    </div>
+    
+    <div class="tabs">
+      <button [class.active]="activeTab === 'logs'" (click)="activeTab = 'logs'">Logs</button>
+      <button [class.active]="activeTab === 'files'" (click)="activeTab = 'files'">Files</button>
+      <button [class.active]="activeTab === 'settings'" (click)="activeTab = 'settings'">Settings</button>
+    </div>
+    
+    <div class="tab-content">
+      <!-- LOGS TAB -->
+      <app-logs-tab 
+        *ngIf="activeTab === 'logs'"
+        [logs]="logs"
+        [filteredLogs]="filteredLogs"
+        [showLevel]="showLevel"
+        [emitters]="emitters"
+        [isOnline]="isOnline"
+        (filterChange)="applyFilters()"
+        (levelToggle)="toggleLevel($event)">
+      </app-logs-tab>
+      
+      <!-- FILES TAB -->
+      <app-files-tab
+        *ngIf="activeTab === 'files'"
+        [fileConfig]="fileConfig"
+        (export)="performExport($event)">
+      </app-files-tab>
+      
+      <!-- SETTINGS TAB -->
+      <app-settings-tab
+        *ngIf="activeTab === 'settings'"
+        [minLogLevel]="minLogLevel"
+        [emitters]="emitters"
+        [remoteEndpoints]="remoteEndpoints"
+        [maxStoredLogs]="maxStoredLogs"
+        [includeStacksInProduction]="includeStacksInProduction"
+        [offlineConfig]="offlineConfig"
+        [offlineLogsCount]="offlineLogsCount"
+        (syncOfflineLogs)="syncOfflineLogs()">
+      </app-settings-tab>
+    </div>
+    
+    <div class="console-footer">
+      <div class="log-count">
+        <span class="count-label">Logs:</span>
+        <span class="count-value">{{ logs.length }}</span>
+        <span class="filtered-label" *ngIf="logs.length !== filteredLogs.length">
+          ({{ filteredLogs.length }} filtered)
+        </span>
+      </div>
+      
+      <div class="status-info">
+        {{ isOnline ? 'Online' : 'Offline' }} | 
+        {{ currentTime }}
+      </div>
+    </div>
+  </div>
+  
+  <div class="debug-trigger" (click)="toggleVisible()" *ngIf="!visible">
+    <span>Debug</span>
+    <span class="log-count" *ngIf="errorCount">{{ errorCount }}</span>
+    <span class="offline-indicator" *ngIf="!isOnline">🔴</span>
+  </div>
