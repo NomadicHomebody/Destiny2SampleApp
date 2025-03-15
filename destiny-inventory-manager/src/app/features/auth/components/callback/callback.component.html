@@ -1,0 +1,12 @@
+<div class="callback-container">
+  <div *ngIf="processing" class="processing">
+    <h2>Processing authentication...</h2>
+    <div class="spinner"></div>
+  </div>
+  
+  <div *ngIf="error" class="error">
+    <h2>Authentication Error</h2>
+    <p>{{ error }}</p>
+    <button routerLink="/auth/login">Return to Login</button>
+  </div>
+</div>

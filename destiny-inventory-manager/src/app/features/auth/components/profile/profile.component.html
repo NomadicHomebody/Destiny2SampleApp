@@ -1,0 +1,59 @@
+<div class="profile-container">
+  <div class="profile-header">
+    <h1>Guardian Profile</h1>
+    <button class="logout-btn" (click)="logout()">Logout</button>
+  </div>
+
+  <div *ngIf="loading" class="loading-spinner">
+    <div class="spinner"></div>
+    <p>Loading your Guardian data...</p>
+  </div>
+
+  <div *ngIf="error" class="error-message">
+    <p>{{ error }}</p>
+    <button (click)="fetchUserProfile()">Try Again</button>
+  </div>
+
+  <div *ngIf="!loading && !error" class="profile-content">
+    <div class="user-info" *ngIf="userProfile">
+      <h2>{{ userProfile.bungieNetUser?.displayName }}</h2>
+      <p class="membership-id">Membership ID: {{ userProfile.bungieNetUser?.membershipId }}</p>
+      
+      <div class="platforms">
+        <h3>Platforms</h3>
+        <div class="platform-list">
+          <div class="platform" *ngFor="let membership of userProfile.destinyMemberships">
+            <span class="platform-icon" [ngClass]="'platform-' + membership.membershipType"></span>
+            <span>{{ getMembershipTypeName(membership.membershipType) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="characters-section" *ngIf="characters.length > 0">
+      <h3>Characters</h3>
+      <div class="character-cards">
+        <div class="character-card" *ngFor="let character of characters">
+          <div class="character-header">
+            <h4>{{ getClassName(character.classType) }}</h4>
+            <p>Light: {{ character.light }}</p>
+          </div>
+          <div class="character-stats">
+            <div class="stat">
+              <span>Race:</span>
+              <span>{{ getRaceName(character.raceType) }}</span>
+            </div>
+            <div class="stat">
+              <span>Gender:</span>
+              <span>{{ getGenderName(character.genderType) }}</span>
+            </div>
+            <div class="stat">
+              <span>Level:</span>
+              <span>{{ character.levelProgression.level }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,9 @@
+<div class="item-grid">
+  <div *ngFor="let item of items" class="item-card" (click)="viewItemDetails(item)">
+    <img [src]="'https://www.bungie.net' + item.icon" alt="{{ item.name }}">
+    <div class="item-info">
+      <h3>{{ item.name }}</h3>
+      <p>{{ item.itemTypeDisplayName }}</p>
+    </div>
+  </div>
+</div>

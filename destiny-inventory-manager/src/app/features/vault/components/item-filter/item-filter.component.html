@@ -1,0 +1,77 @@
+<div class="filter-container">
+  <form [formGroup]="filterForm">
+    <div class="search-row">
+      <div class="search-field">
+        <span class="material-icons search-icon">search</span>
+        <input 
+          type="text" 
+          formControlName="searchText" 
+          placeholder="Search items..." 
+          class="search-input">
+        <button 
+          type="button" 
+          class="clear-search" 
+          *ngIf="filterForm.get('searchText')?.value"
+          (click)="filterForm.get('searchText')?.setValue('')">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      
+      <div class="filter-actions">
+        <button 
+          type="button" 
+          class="filter-toggle" 
+          (click)="toggleAdvancedFilters()">
+          <span class="material-icons">tune</span>
+          {{ showAdvancedFilters ? 'Hide' : 'Show' }} Filters
+        </button>
+        
+        <button 
+          type="button" 
+          class="reset-btn" 
+          (click)="resetFilters()"
+          *ngIf="filterForm.dirty">
+          <span class="material-icons">refresh</span>
+          Reset
+        </button>
+      </div>
+    </div>
+    
+    <div class="advanced-filters" *ngIf="showAdvancedFilters">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="itemType">Item Type</label>
+          <select formControlName="itemType" id="itemType" class="filter-select">
+            <option *ngFor="let type of itemTypes" [ngValue]="type.id">{{ type.name }}</option>
+          </select>
+        </div>
+        
+        <div class="filter-group">
+          <label for="tierType">Rarity</label>
+          <select formControlName="tierType" id="tierType" class="filter-select">
+            <option *ngFor="let tier of tierTypes" [ngValue]="tier.id">{{ tier.name }}</option>
+          </select>
+        </div>
+        
+        <div class="filter-group">
+          <label for="damageType">Element</label>
+          <select formControlName="damageType" id="damageType" class="filter-select">
+            <option *ngFor="let damage of damageTypes" [ngValue]="damage.id">{{ damage.name }}</option>
+          </select>
+        </div>
+        
+        <div class="filter-group">
+          <label for="minimumPower">Min Power</label>
+          <input 
+            type="number" 
+            formControlName="minimumPower" 
+            id="minimumPower" 
+            placeholder="Any" 
+            min="0" 
+            max="2000"
+            class="filter-input">
+        </div>
+      </div>
+    </div>
+  </form>
+</div>

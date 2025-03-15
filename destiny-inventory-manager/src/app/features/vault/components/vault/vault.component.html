@@ -1,0 +1,130 @@
+<div class="vault-container">
+  <header class="vault-header">
+    <h1>Destiny 2 Vault</h1>
+    <div class="header-actions">
+      <button class="refresh-btn" (click)="refreshVault()" [disabled]="isLoading">
+        <span class="material-icons">refresh</span>
+        Refresh
+      </button>
+      <button class="profile-btn" routerLink="/auth/profile">
+        <span class="material-icons">person</span>
+        Profile
+      </button>
+    </div>
+  </header>
+
+  <app-item-filter (filterChange)="applyFilter($event)"></app-item-filter>
+
+  <div *ngIf="isLoading" class="loading-container">
+    <div class="spinner"></div>
+    <p>Loading your inventory...</p>
+  </div>
+
+  <div *ngIf="error" class="error-container">
+    <p>{{ error }}</p>
+    <button (click)="refreshVault()">Try Again</button>
+  </div>
+
+  <div *ngIf="!isLoading && !error" class="inventory-container">
+    <div class="inventory-section">
+      <h2>Vault <span class="item-count">({{ vaultItemCount }} items)</span></h2>
+      <div class="items-grid vault-items">
+        <div *ngFor="let item of getItemsForLocation(0)" 
+             class="item-tile" 
+             [class.legendary]="item.tierType === 5"
+             [class.exotic]="item.tierType === 6"
+             (click)="selectItem(item)">
+          <div class="item-power" *ngIf="item.powerLevel > 0">{{ item.powerLevel }}</div>
+          <img [src]="item.displayProperties.icon" [alt]="item.displayProperties.name" class="item-icon">
+          <div class="item-name">{{ item.displayProperties.name }}</div>
+        </div>
+        <div *ngIf="getItemsForLocation(0).length === 0" class="empty-message">
+          No items in vault matching filters
+        </div>
+      </div>
+    </div>
+
+    <div class="inventory-section">
+      <h2>Character <span class="item-count">({{ characterItemCount }} items)</span></h2>
+      <div class="items-grid character-items">
+        <div *ngFor="let item of getItemsForLocation(1)" 
+             class="item-tile" 
+             [class.legendary]="item.tierType === 5"
+             [class.exotic]="item.tierType === 6"
+             [class.equipped]="item.isEquipped"
+             (click)="selectItem(item)">
+          <div class="item-power" *ngIf="item.powerLevel > 0">{{ item.powerLevel }}</div>
+          <img [src]="item.displayProperties.icon" [alt]="item.displayProperties.name" class="item-icon">
+          <div class="item-tag equipped-tag" *ngIf="item.isEquipped">Equipped</div>
+          <div class="item-name">{{ item.displayProperties.name }}</div>
+        </div>
+        <div *ngIf="getItemsForLocation(1).length === 0" class="empty-message">
+          No character items matching filters
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="selectedItem" class="item-detail-overlay">
+    <div class="item-detail-container">
+      <button class="close-btn" (click)="closeItemDetail()">×</button>
+      <div class="item-detail-header" [ngClass]="'tier-' + selectedItem.tierType">
+        <img [src]="selectedItem.displayProperties.icon" [alt]="selectedItem.displayProperties.name" class="detail-icon">
+        <div class="item-title">
+          <h3>{{ selectedItem.displayProperties.name }}</h3>
+          <div class="item-subtitle">
+            {{ selectedItem.itemTypeDisplayName }} | {{ selectedItem.tierTypeName }}
+            <span *ngIf="selectedItem.damageTypeName !== 'None'"> | {{ selectedItem.damageTypeName }}</span>
+          </div>
+        </div>
+        <div class="item-power-level" *ngIf="selectedItem.powerLevel > 0">
+          <span class="power-value">{{ selectedItem.powerLevel }}</span>
+        </div>
+      </div>
+
+      <div class="item-description">
+        {{ selectedItem.displayProperties.description }}
+      </div>
+
+      <div class="item-stats" *ngIf="selectedItem.statValues && Object.keys(selectedItem.statValues).length > 0">
+        <h4>Stats</h4>
+        <div class="stat-row" *ngFor="let stat of getSortedStats(selectedItem.statValues)">
+          <span class="stat-name">{{ getStatName(stat.hash) }}</span>
+          <div class="stat-bar-container">
+            <div class="stat-bar" [style.width.%]="(stat.value / 100) * 100"></div>
+          </div>
+          <span class="stat-value">{{ stat.value }}</span>
+        </div>
+      </div>
+
+      <div class="item-perks" *ngIf="selectedItem.perks && selectedItem.perks.length > 0">
+        <h4>Perks</h4>
+        <div class="perk-grid">
+          <div *ngFor="let perk of selectedItem.perks" class="perk" [class.active]="perk.isActive">
+            <img [src]="perk.icon" [alt]="perk.name" class="perk-icon">
+            <div class="perk-tooltip">
+              <div class="perk-name">{{ perk.name }}</div>
+              <div class="perk-description">{{ perk.description }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="item-actions">
+        <button *ngIf="selectedItem.location === 0" class="action-btn transfer" 
+                (click)="transferToCharacter(selectedItem)">
+          Transfer to Character
+        </button>
+        <button *ngIf="selectedItem.location === 1" class="action-btn transfer" 
+                (click)="transferToVault(selectedItem)">
+          Transfer to Vault
+        </button>
+        <button *ngIf="selectedItem.location === 1 && !selectedItem.isEquipped && selectedItem.canEquip" 
+                class="action-btn equip" 
+                (click)="equipItem(selectedItem)">
+          Equip
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
