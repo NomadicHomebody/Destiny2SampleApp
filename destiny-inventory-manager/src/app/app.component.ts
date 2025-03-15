@@ -1,6 +1,5 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { HttpClientModule } from '@angular/common/http';
 
 @Component({
   selector: 'app-root',
@@ -8,8 +7,8 @@ import { HttpClientModule } from '@angular/common/http';
   styleUrls: ['./app.component.css'],
   standalone: true,
   imports: [
-    RouterOutlet,
-    HttpClientModule
+    RouterOutlet
+    // HttpClientModule is already provided at the module level - no need to import it here
   ]
 })
 export class AppComponent {

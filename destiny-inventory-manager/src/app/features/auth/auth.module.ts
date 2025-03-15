@@ -9,7 +9,7 @@ import { LoginComponent } from './components/login/login.component';
 import { CallbackComponent } from './components/callback/callback.component';
 import { ProfileComponent } from './components/profile/profile.component';
 import { AUTH_ROUTES } from './auth.routes';
-import { AuthService } from './services/auth.service';
+// AuthService is already provided in 'root', no need to provide it here
 
 @NgModule({
   imports: [
@@ -23,7 +23,7 @@ import { AuthService } from './services/auth.service';
     CallbackComponent,
     ProfileComponent
   ],
-  providers: [AuthService],
+  // Remove providers array since AuthService is already provided in 'root'
   exports: [
     RouterModule
   ]
