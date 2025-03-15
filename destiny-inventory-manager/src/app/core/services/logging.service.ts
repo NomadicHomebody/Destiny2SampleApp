@@ -3,6 +3,8 @@ import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
+import { Observable, forkJoin, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 
 export enum LogLevel {
   DEBUG = 'DEBUG',
@@ -38,18 +40,59 @@ export interface LogEntry {
   };
 }
 
+interface LogEmitterConfig {
+  console?: boolean;
+  remote?: boolean;
+  file?: boolean;
+}
+
+interface FileLogConfig {
+  enabled: boolean;
+  path?: string;
+  maxSize?: number;
+  maxFiles?: number;
+  compress?: boolean;
+}
+
+// Default log emitter configuration if environment doesn't specify
+const DEFAULT_EMITTERS: LogEmitterConfig = {
+  console: true,
+  remote: false,
+  file: false
+};
+
 @Injectable({
   providedIn: 'root'
 })
 export class LoggingService {
   private readonly APP_VERSION = environment.logging?.appVersion || '1.0.0';
-  private logEndpoint = environment.logging?.remoteEndpoint || '/api/logs';
+  private readonly remoteEndpoints: string[] = environment.logging?.remoteEndpoints || [];
+  private readonly emitters: LogEmitterConfig;
+  private readonly fileConfig: FileLogConfig;
+  
+  // For the in-memory log buffer used for file logging
+  private logBuffer: LogEntry[] = [];
+  private readonly bufferSize = 100; // Number of logs to buffer before writing to file
+  private isWritingToFile = false;
 
   constructor(
     private http: HttpClient,
     private router: Router,
     @Inject(PLATFORM_ID) private platformId: Object
-  ) {}
+  ) {
+    // Initialize emitter configuration from environment or use defaults
+    this.emitters = environment.logging?.emitters || DEFAULT_EMITTERS;
+    
+    // Initialize file logging config
+    this.fileConfig = environment.logging?.file || { enabled: false };
+    
+    // Log service initialization
+    this.info('LoggingService', 'Logging service initialized', {
+      emitters: this.emitters,
+      fileConfig: this.fileConfig,
+      remoteEndpointsCount: this.remoteEndpoints.length
+    });
+  }
 
   /**
    * Log a message with the specified level and optional details
@@ -62,17 +105,28 @@ export class LoggingService {
     code?: string,
     additionalData?: any
   ): void {
-    const logEntry: LogEntry = this.buildLogEntry(level, source, message, error, code, additionalData);
-    
-    // Print to console in development
-    this.consoleLog(logEntry);
-    
-    // Send to server if in production or explicitly requested
-    if ((environment.logging?.enableRemote || false) || level === LogLevel.ERROR || level === LogLevel.FATAL) {
-      this.sendToServer(logEntry);
+    // Check if we should log this level based on environment configuration
+    const minLevel = this.getMinLogLevel();
+    if (!this.shouldLogLevel(level, minLevel)) {
+      return;
     }
     
-    // Store critical errors for analytics
+    const logEntry: LogEntry = this.buildLogEntry(level, source, message, error, code, additionalData);
+    
+    // Send to each enabled emitter
+    if (this.emitters.console) {
+      this.consoleLog(logEntry);
+    }
+    
+    if (this.emitters.remote) {
+      this.sendToEndpoints(logEntry);
+    }
+    
+    if (this.emitters.file) {
+      this.writeToLogFile(logEntry);
+    }
+    
+    // Always store critical errors regardless of emitter settings
     if (level === LogLevel.ERROR || level === LogLevel.FATAL) {
       this.storeForAnalytics(logEntry);
     }
@@ -103,9 +157,74 @@ export class LoggingService {
    * Log a debug message (only in development)
    */
   public debug(source: string, message: string, additionalData?: any): void {
-    if (!environment.production) {
-      this.log(LogLevel.DEBUG, source, message, null, undefined, additionalData);
+    this.log(LogLevel.DEBUG, source, message, null, undefined, additionalData);
+  }
+
+  /**
+   * Get stored logs (for viewing in debug console)
+   */
+  public getStoredLogs(): LogEntry[] {
+    if (!isPlatformBrowser(this.platformId)) return [];
+    
+    try {
+      const storedLogs = localStorage.getItem('error_logs');
+      return storedLogs ? JSON.parse(storedLogs) : [];
+    } catch (e) {
+      console.error('Failed to retrieve stored logs:', e);
+      return [];
     }
+  }
+
+  /**
+   * Export logs to file for the user to download
+   */
+  public exportLogs(filename = 'application-logs.json'): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    
+    try {
+      const logs = this.getStoredLogs();
+      const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+      
+      // Create download link and trigger it
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      
+      // Clean up
+      URL.revokeObjectURL(url);
+      
+      this.info('LoggingService', 'Logs exported to file', { filename, logCount: logs.length });
+    } catch (e) {
+      console.error('Failed to export logs:', e);
+    }
+  }
+  
+  /**
+   * Determine if a level should be logged based on minimum level setting
+   */
+  private shouldLogLevel(level: LogLevel, minLevel: LogLevel): boolean {
+    const levelPriority: Record<LogLevel, number> = {
+      [LogLevel.DEBUG]: 0,
+      [LogLevel.INFO]: 1,
+      [LogLevel.WARN]: 2,
+      [LogLevel.ERROR]: 3,
+      [LogLevel.FATAL]: 4
+    };
+    
+    return levelPriority[level] >= levelPriority[minLevel];
+  }
+  
+  /**
+   * Get minimum log level from environment or default to INFO
+   */
+  private getMinLogLevel(): LogLevel {
+    const configLevel = environment.logging?.minLevel;
+    if (configLevel && Object.values(LogLevel).includes(configLevel as LogLevel)) {
+      return configLevel as LogLevel;
+    }
+    return environment.production ? LogLevel.INFO : LogLevel.DEBUG;
   }
 
   /**
@@ -152,9 +271,12 @@ export class LoggingService {
 
     // Add error details if present
     if (error) {
+      // Don't include stack traces in production if configured that way
+      const includeStack = environment.logging?.includeStacksInProduction || !environment.production;
+      
       logEntry.technical = {
         name: error.name || (typeof error === 'object' ? error.constructor.name : typeof error),
-        stack: error.stack,
+        stack: includeStack ? error.stack : undefined,
         rawError: this.sanitizeErrorObject(error)
       };
     }
@@ -203,39 +325,53 @@ export class LoggingService {
    * Console output for development purposes
    */
   private consoleLog(logEntry: LogEntry): void {
-    if (!environment.production || logEntry.level === LogLevel.ERROR || logEntry.level === LogLevel.FATAL) {
-      const formattedJson = JSON.stringify(logEntry, null, 2);
-      
-      switch (logEntry.level) {
-        case LogLevel.ERROR:
-        case LogLevel.FATAL:
-          console.error(`%c[${logEntry.level}] ${logEntry.source}: ${logEntry.message}`, 'color: #e74c3c', '\n', formattedJson);
-          break;
-        case LogLevel.WARN:
-          console.warn(`%c[${logEntry.level}] ${logEntry.source}: ${logEntry.message}`, 'color: #f39c12', '\n', formattedJson);
-          break;
-        case LogLevel.INFO:
-          console.info(`%c[${logEntry.level}] ${logEntry.source}: ${logEntry.message}`, 'color: #3498db', '\n', formattedJson);
-          break;
-        default:
-          console.log(`%c[${logEntry.level}] ${logEntry.source}: ${logEntry.message}`, 'color: #7f8c8d', '\n', formattedJson);
-      }
+    const formattedJson = environment.production 
+      ? undefined // Don't output JSON in production to save console space
+      : JSON.stringify(logEntry, null, 2);
+    
+    switch (logEntry.level) {
+      case LogLevel.ERROR:
+      case LogLevel.FATAL:
+        console.error(`%c[${logEntry.level}] ${logEntry.source}: ${logEntry.message}`, 'color: #e74c3c', 
+          formattedJson ? '\n' + formattedJson : '');
+        break;
+      case LogLevel.WARN:
+        console.warn(`%c[${logEntry.level}] ${logEntry.source}: ${logEntry.message}`, 'color: #f39c12', 
+          formattedJson ? '\n' + formattedJson : '');
+        break;
+      case LogLevel.INFO:
+        console.info(`%c[${logEntry.level}] ${logEntry.source}: ${logEntry.message}`, 'color: #3498db', 
+          formattedJson ? '\n' + formattedJson : '');
+        break;
+      default:
+        console.log(`%c[${logEntry.level}] ${logEntry.source}: ${logEntry.message}`, 'color: #7f8c8d', 
+          formattedJson ? '\n' + formattedJson : '');
     }
   }
 
   /**
-   * Send logs to the server API
+   * Send logs to multiple remote endpoints
    */
-  private sendToServer(logEntry: LogEntry): void {
+  private sendToEndpoints(logEntry: LogEntry): void {
     // Only send logs to server from browser environment
-    if (isPlatformBrowser(this.platformId)) {
-      // Use HTTP client to send logs to your backend
-      this.http.post(this.logEndpoint, logEntry).subscribe({
-        error: (err) => {
+    if (!isPlatformBrowser(this.platformId) || this.remoteEndpoints.length === 0) {
+      return;
+    }
+    
+    // Create an array of HTTP requests, one for each endpoint
+    const requests: Observable<any>[] = this.remoteEndpoints.map(endpoint => 
+      this.http.post(endpoint, logEntry).pipe(
+        catchError(error => {
           // Don't try to log this error to avoid potential infinite loops
-          console.error('Failed to send log to server:', err);
-        }
-      });
+          console.error(`Failed to send log to endpoint ${endpoint}:`, error);
+          return of(null); // Return observable that doesn't error
+        })
+      )
+    );
+    
+    // Use forkJoin to process all requests in parallel
+    if (requests.length > 0) {
+      forkJoin(requests).subscribe();
     }
   }
 
@@ -262,6 +398,114 @@ export class LoggingService {
     } catch (e) {
       console.error('Failed to store error log locally:', e);
     }
+  }
+  
+  /**
+   * Write log entry to the file system
+   * This uses a buffer approach to avoid frequent file operations
+   */
+  private writeToLogFile(logEntry: LogEntry): void {
+    if (!isPlatformBrowser(this.platformId) || !this.fileConfig.enabled) {
+      return;
+    }
+    
+    // Add to buffer
+    this.logBuffer.push(logEntry);
+    
+    // Write to file when buffer reaches threshold
+    if (this.logBuffer.length >= this.bufferSize && !this.isWritingToFile) {
+      this.flushLogBuffer();
+    }
+  }
+  
+  /**
+   * Flush the log buffer to a file
+   */
+  private flushLogBuffer(): void {
+    if (this.logBuffer.length === 0 || this.isWritingToFile) {
+      return;
+    }
+    
+    this.isWritingToFile = true;
+    
+    try {
+      // Get logs to write
+      const logsToWrite = [...this.logBuffer];
+      this.logBuffer = [];
+      
+      // Format logs as JSON
+      const logText = JSON.stringify(logsToWrite, null, 2);
+      
+      // In browser environment, we can't directly write to file system
+      // So we'll create a file for download
+      this.saveLogsToFile(logText);
+    } catch (e) {
+      console.error('Failed to write logs to file:', e);
+    } finally {
+      this.isWritingToFile = false;
+    }
+  }
+  
+  /**
+   * Save logs to a file using available browser APIs
+   */
+  private saveLogsToFile(logText: string): void {
+    const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
+    const filename = `app-logs-${timestamp}.json`;
+    
+    if (this.fileConfig.compress) {
+      // If compression is enabled, use the compression library
+      this.saveCompressedLogs(logText, filename);
+    } else {
+      // Otherwise save as regular JSON
+      const blob = new Blob([logText], { type: 'application/json' });
+      this.triggerDownload(blob, filename);
+    }
+  }
+  
+  /**
+   * Save compressed logs
+   */
+  private saveCompressedLogs(logText: string, filename: string): void {
+    // In a real implementation, you would use a library like pako for compression
+    // For this example, we're simulating compression by just saving the file
+    
+    // Note: To actually implement compression, you'd add:
+    // import * as pako from 'pako';
+    // const compressed = pako.gzip(logText);
+    // const blob = new Blob([compressed], { type: 'application/gzip' });
+    
+    // Simulate compression for this example
+    console.log('Compressing logs (simulated)');
+    const blob = new Blob([logText], { type: 'application/json' });
+    this.triggerDownload(blob, filename + '.gz');
+  }
+  
+  /**
+   * Trigger file download
+   */
+  private triggerDownload(blob: Blob, filename: string): void {
+    // Create download link
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = filename;
+    
+    // Add to document and trigger download
+    document.body.appendChild(a);
+    a.click();
+    
+    // Clean up
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    this.consoleLog({
+      timestamp: new Date().toISOString(),
+      level: LogLevel.INFO,
+      source: 'LoggingService',
+      message: `Logs saved to file: ${filename}`
+    });
   }
 
   /**
