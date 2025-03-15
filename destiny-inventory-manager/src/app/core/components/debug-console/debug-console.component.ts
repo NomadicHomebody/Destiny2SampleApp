@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { LoggingService, LogEntry, LogLevel } from '../../services/logging.service';
 import { Subscription } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import * as pako from 'pako';
 
 @Component({
   selector: 'app-debug-console',
@@ -48,11 +49,11 @@ import { environment } from '../../../../environments/environment';
         <div *ngIf="activeTab === 'logs'">
           <div class="debug-filters">
             <div class="level-filters">
-              <label *ngFor="let level of objectKeys(logLevels)">
-                <input type="checkbox" [checked]="showLevel[logLevels[level]]" 
-                      (change)="toggleLevel(logLevels[level])">
+            <label *ngFor="let level of objectKeys(logLevels)">
+                <input type="checkbox" [checked]="showLevel[getLevelValue(level)]" 
+                    (change)="toggleLevel(getLevelValue(level))">
                 <span [ngClass]="'level-text-' + level.toLowerCase()">{{level}}</span>
-              </label>
+            </label>
             </div>
             
             <div class="source-filter">
@@ -113,11 +114,11 @@ import { environment } from '../../../../environments/environment';
                     </div>
                     <div class="detail-item" *ngIf="log.context?.url">
                       <div class="detail-label">URL:</div>
-                      <div class="detail-value">{{ log.context.url }}</div>
+                      <div class="detail-value">{{ log.context?.url }}</div>
                     </div>
                     <div class="detail-item" *ngIf="log.context?.user">
                       <div class="detail-label">User:</div>
-                      <div class="detail-value">{{ formatObject(log.context.user) }}</div>
+                      <div class="detail-value">{{ formatObject(log.context?.user) }}</div>
                     </div>
                   </div>
                   
@@ -127,7 +128,7 @@ import { environment } from '../../../../environments/environment';
                     <div class="detail-item" *ngIf="log.context?.additionalData">
                       <div class="detail-label">Additional Data:</div>
                       <div class="detail-value">
-                        <pre>{{ formatObject(log.context.additionalData) }}</pre>
+                        <pre>{{ formatObject(log.context?.additionalData) }}</pre>
                       </div>
                     </div>
                     <div class="detail-item" *ngIf="log.metadata">
@@ -147,18 +148,18 @@ import { environment } from '../../../../environments/environment';
                   <div *ngSwitchCase="'error'" class="error-view">
                     <div class="detail-item">
                       <div class="detail-label">Error Name:</div>
-                      <div class="detail-value">{{ log.technical.name }}</div>
+                      <div class="detail-value">{{ log.technical?.name }}</div>
                     </div>
-                    <div class="detail-item" *ngIf="log.technical.stack">
+                    <div class="detail-item" *ngIf="log.technical?.stack">
                       <div class="detail-label">Stack Trace:</div>
                       <div class="detail-value">
-                        <pre class="stack-trace">{{ log.technical.stack }}</pre>
+                        <pre class="stack-trace">{{ log.technical?.stack }}</pre>
                       </div>
                     </div>
-                    <div class="detail-item" *ngIf="log.technical.rawError">
+                    <div class="detail-item" *ngIf="log.technical?.rawError">
                       <div class="detail-label">Error Details:</div>
                       <div class="detail-value">
-                        <pre>{{ formatObject(log.technical.rawError) }}</pre>
+                        <pre>{{ formatObject(log.technical?.rawError) }}</pre>
                       </div>
                     </div>
                   </div>
@@ -1018,6 +1019,11 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
   get hasOfflineLogs(): boolean {
     return this.offlineLogsCount > 0;
   }
+
+  getLevelValue(level: string): LogLevel {
+    // Safety check since LogLevel is an enum
+    return LogLevel[level as keyof typeof LogLevel];
+  }
   
   // Subscriptions
   private subscription = new Subscription();
@@ -1287,7 +1293,7 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
     }
   }
 
-  private applyFilters(): void {
+  public applyFilters(): void {
     this.filteredLogs = this.logs.filter(log => {
       // Filter by level
       if (!this.showLevel[log.level]) {

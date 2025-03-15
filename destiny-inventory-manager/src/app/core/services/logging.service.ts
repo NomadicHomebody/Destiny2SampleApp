@@ -28,6 +28,8 @@ export interface LogEntry {
     user?: any;
     action?: string;
     additionalData?: any;
+    isRetry?: boolean;      
+    retryTimestamp?: string; 
   };
   technical?: {
     name?: string;
@@ -131,8 +133,22 @@ export class LoggingService {
     this.emitters = environment.logging?.emitters || DEFAULT_EMITTERS;
     
     // Initialize file logging config
-    this.fileConfig = { ...DEFAULT_FILE_CONFIG, ...environment.logging?.file };
-    
+    // Create a properly typed rotation period value
+    const rotationValue = environment.logging?.file?.rotationPeriod;
+    const validRotationPeriods = ['daily', 'hourly', 'weekly'];
+    const typedRotationPeriod = 
+    validRotationPeriods.includes(rotationValue) 
+    ? rotationValue as 'daily' | 'hourly' | 'weekly' 
+    : undefined;
+
+    // Create a properly typed configuration object
+    const typedFileConfig: FileLogConfig = {
+    ...DEFAULT_FILE_CONFIG,
+    ...environment.logging?.file,
+    rotationPeriod: typedRotationPeriod || DEFAULT_FILE_CONFIG.rotationPeriod
+    };
+
+this.fileConfig = typedFileConfig;
     // Initialize offline config
     this.offlineConfig = { ...DEFAULT_OFFLINE_CONFIG, ...environment.logging?.offline };
     
