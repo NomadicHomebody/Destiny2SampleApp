@@ -1,5 +1,5 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, OnDestroy, Inject, PLATFORM_ID } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { LoggingService, LogEntry, LogLevel } from '../../services/logging.service';
 import { Subscription } from 'rxjs';
 import { environment } from '../../../../environments/environment';
@@ -288,17 +288,16 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
   // Subscriptions
   private subscription = new Subscription();
   
-  constructor(private loggingService: LoggingService) {}
+  constructor(
+    private loggingService: LoggingService,
+    @Inject(PLATFORM_ID) private platformId: Object
+  ) {}
 
   ngOnInit(): void {
-    // Only enable in non-production
-    if (!environment.production) {
+    // Only enable in non-production and only in browser environment
+    if (!environment.production && isPlatformBrowser(this.platformId)) {
       // Load logs from localStorage
       this.loadSavedLogs();
-      
-      // Subscribe to new logs
-      // Note: This would require modifying the LoggingService to emit logs
-      // through an observable for real-time updates
       
       // Show by default in dev mode
       this.visible = !environment.production;
@@ -327,11 +326,16 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
     this.logs = [];
     this.applyFilters();
     
-    // Clear local storage
-    localStorage.removeItem('error_logs');
+    // Clear local storage - only in browser
+    if (isPlatformBrowser(this.platformId)) {
+      localStorage.removeItem('error_logs');
+    }
   }
 
   copyLogs(): void {
+    // Only works in browser
+    if (!isPlatformBrowser(this.platformId)) return;
+    
     const logText = this.logs
       .filter(log => this.showLevel[log.level])
       .map(log => JSON.stringify(log, null, 2))
@@ -365,6 +369,9 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
   }
 
   private loadSavedLogs(): void {
+    // Only try to access localStorage in browser environment
+    if (!isPlatformBrowser(this.platformId)) return;
+    
     try {
       const storedLogs = localStorage.getItem('error_logs');
       if (storedLogs) {

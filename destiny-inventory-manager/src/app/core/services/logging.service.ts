@@ -42,10 +42,8 @@ export interface LogEntry {
   providedIn: 'root'
 })
 export class LoggingService {
-  private readonly APP_VERSION = '1.0.0'; // Update this with your versioning strategy
-  private logEndpoint = environment.production 
-    ? '/api/logs' 
-    : 'https://localhost:3000/api/logs'; // Adjust based on your API setup
+  private readonly APP_VERSION = environment.logging?.appVersion || '1.0.0';
+  private logEndpoint = environment.logging?.remoteEndpoint || '/api/logs';
 
   constructor(
     private http: HttpClient,
@@ -70,7 +68,7 @@ export class LoggingService {
     this.consoleLog(logEntry);
     
     // Send to server if in production or explicitly requested
-    if (environment.production || level === LogLevel.ERROR || level === LogLevel.FATAL) {
+    if ((environment.logging?.enableRemote || false) || level === LogLevel.ERROR || level === LogLevel.FATAL) {
       this.sendToServer(logEntry);
     }
     
@@ -139,15 +137,16 @@ export class LoggingService {
     };
 
     // Add user info if available
-    const authToken = isPlatformBrowser(this.platformId) ? localStorage.getItem('authToken') : null;
-    if (authToken) {
-      try {
-        // Don't include the full token, just user identifier info
-        // This assumes you store memberId/type/username somewhere accessible
-        const membershipId = localStorage.getItem('membershipId');
-        logEntry.context.user = { membershipId };
-      } catch (e) {
-        // If parsing fails, don't include user info
+    if (isPlatformBrowser(this.platformId)) {
+      const authToken = localStorage.getItem('authToken');
+      if (authToken) {
+        try {
+          // Don't include the full token, just user identifier info
+          const membershipId = localStorage.getItem('membershipId');
+          logEntry.context.user = { membershipId };
+        } catch (e) {
+          // If parsing fails, don't include user info
+        }
       }
     }
 
@@ -244,23 +243,24 @@ export class LoggingService {
    * Store critical errors for later analysis or sending when online
    */
   private storeForAnalytics(logEntry: LogEntry): void {
-    if (isPlatformBrowser(this.platformId)) {
-      try {
-        // Get existing logs
-        const storedLogs = localStorage.getItem('error_logs') || '[]';
-        const logs = JSON.parse(storedLogs);
-        
-        // Add new log, limit to most recent 50 errors
-        logs.push(logEntry);
-        if (logs.length > 50) {
-          logs.shift(); // Remove oldest
-        }
-        
-        // Save back to storage
-        localStorage.setItem('error_logs', JSON.stringify(logs));
-      } catch (e) {
-        console.error('Failed to store error log locally:', e);
+    if (!isPlatformBrowser(this.platformId)) return;
+    
+    try {
+      // Get existing logs
+      const storedLogs = localStorage.getItem('error_logs') || '[]';
+      const logs = JSON.parse(storedLogs);
+      
+      // Add new log, limit to most recent logs (from config or default 50)
+      logs.push(logEntry);
+      const maxLogs = environment.logging?.maxStoredLogs || 50;
+      if (logs.length > maxLogs) {
+        logs.shift(); // Remove oldest
       }
+      
+      // Save back to storage
+      localStorage.setItem('error_logs', JSON.stringify(logs));
+    } catch (e) {
+      console.error('Failed to store error log locally:', e);
     }
   }
 
