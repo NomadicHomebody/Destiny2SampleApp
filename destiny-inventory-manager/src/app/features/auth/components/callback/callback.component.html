@@ -1,12 +1,32 @@
-<div class="callback-container">
-  <div *ngIf="processing" class="processing">
-    <h2>Processing authentication...</h2>
-    <div class="spinner"></div>
+<canvas *ngIf="isPlatformBrowser()" #canvas class="particles-canvas"></canvas>
+
+<div class="callback-container" [ngClass]="{'no-canvas': !isPlatformBrowser()}">
+  <div *ngIf="processing" class="callback-card processing-card">
+    <div class="callback-logo">
+      <svg viewBox="0 0 100 100" class="destiny-logo">
+        <path d="M50,5 C25.1,5 5,25.1 5,50 C5,74.9 25.1,95 50,95 C74.9,95 95,74.9 95,50 C95,25.1 74.9,5 50,5 Z M50,0 C77.6,0 100,22.4 100,50 C100,77.6 77.6,100 50,100 C22.4,100 0,77.6 0,50 C0,22.4 22.4,0 50,0 Z" class="logo-outline"></path>
+        <path d="M75.4,28.8 L64.1,39.1 L51.3,33.5 L42.7,42.1 L39.1,64.1 L28.8,75.4 L37.8,44.2 L44.2,37.8 L75.4,28.8 Z" class="logo-inner"></path>
+        <path d="M37.8,44.2 L28.8,24.6 L24.6,28.8 L44.2,37.8 L37.8,44.2 Z" class="logo-inner"></path>
+        <path d="M44.2,37.8 L64.1,28.8 L60.9,24.6 L35.6,35.6 L44.2,37.8 Z" class="logo-inner"></path>
+      </svg>
+    </div>
+    <h2>Processing Authentication</h2>
+    <p>Connecting to your Bungie account...</p>
+    <div class="processing-spinner">
+      <svg class="spinner-svg" viewBox="0 0 50 50">
+        <circle class="spinner-path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
+      </svg>
+    </div>
   </div>
   
-  <div *ngIf="error" class="error">
+  <div *ngIf="error" class="callback-card error-card">
+    <div class="error-icon">
+      <svg viewBox="0 0 24 24" class="error-svg">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+      </svg>
+    </div>
     <h2>Authentication Error</h2>
     <p>{{ error }}</p>
-    <button routerLink="/auth/login">Return to Login</button>
+    <button routerLink="/auth/login" class="return-button">Return to Login</button>
   </div>
 </div>

@@ -1,0 +1,20 @@
+<canvas *ngIf="isPlatformBrowser()" #canvas class="particles-canvas"></canvas>
+
+<div class="login-container" [ngClass]="{'no-canvas': !isPlatformBrowser()}">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg viewBox="0 0 100 100" class="destiny-logo">
+        <path d="M50,5 C25.1,5 5,25.1 5,50 C5,74.9 25.1,95 50,95 C74.9,95 95,74.9 95,50 C95,25.1 74.9,5 50,5 Z M50,0 C77.6,0 100,22.4 100,50 C100,77.6 77.6,100 50,100 C22.4,100 0,77.6 0,50 C0,22.4 22.4,0 50,0 Z" class="logo-outline"/>
+        <path d="M75.4,28.8 L64.1,39.1 L51.3,33.5 L42.7,42.1 L39.1,64.1 L28.8,75.4 L37.8,44.2 L44.2,37.8 L75.4,28.8 Z" class="logo-inner"/>
+        <path d="M37.8,44.2 L28.8,24.6 L24.6,28.8 L44.2,37.8 L37.8,44.2 Z" class="logo-inner"/>
+        <path d="M44.2,37.8 L64.1,28.8 L60.9,24.6 L35.6,35.6 L44.2,37.8 Z" class="logo-inner"/>
+      </svg>
+    </div>
+    <h1>Destiny Inventory Manager</h1>
+    <p>Login to manage your Guardian's inventory</p>
+    <button [class.loading]="loading" (click)="login()" class="bungie-login-btn">
+      <span class="btn-content">Login with Bungie</span>
+      <span class="loading-spinner"></span>
+    </button>
+  </div>
+</div>
