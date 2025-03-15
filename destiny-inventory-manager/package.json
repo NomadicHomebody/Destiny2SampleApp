@@ -4,6 +4,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "start:https": "ng serve --ssl true --ssl-key C:/Users/jspin/Documents/Code/Destiny2SampleApp/destiny-inventory-manager/certs/cert.key --ssl-cert C:/Users/jspin/Documents/Code/Destiny2SampleApp/destiny-inventory-manager/certs/cert.crt --port 4433",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
