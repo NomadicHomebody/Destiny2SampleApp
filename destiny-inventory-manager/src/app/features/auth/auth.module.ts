@@ -1,21 +1,15 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, Routes } from '@angular/router';
+import { RouterModule } from '@angular/router';
 import { HttpClientModule } from '@angular/common/http';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-// Import the components we'll create
+// Import the components
 import { LoginComponent } from './components/login/login.component';
 import { CallbackComponent } from './components/callback/callback.component';
 import { ProfileComponent } from './components/profile/profile.component';
-
-// Auth routes
-const routes: Routes = [
-  { path: '', redirectTo: 'login', pathMatch: 'full' },
-  { path: 'login', component: LoginComponent },
-  { path: 'callback', component: CallbackComponent },
-  { path: 'profile', component: ProfileComponent }
-];
+import { AUTH_ROUTES } from './auth.routes';
+import { AuthService } from './services/auth.service';
 
 @NgModule({
   imports: [
@@ -23,8 +17,13 @@ const routes: Routes = [
     FormsModule,
     ReactiveFormsModule,
     HttpClientModule,
-    RouterModule.forChild(routes)
+    RouterModule.forChild(AUTH_ROUTES),
+    // Import standalone components instead of declaring them
+    LoginComponent,
+    CallbackComponent,
+    ProfileComponent
   ],
+  providers: [AuthService],
   exports: [
     RouterModule
   ]

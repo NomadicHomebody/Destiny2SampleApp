@@ -1,28 +1,24 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, Routes } from '@angular/router';
-import { FormsModule } from '@angular/forms';
+import { HttpClientModule } from '@angular/common/http';
+import { ReactiveFormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
 
-// Import components
 import { VaultComponent } from './components/vault/vault.component';
-import { ItemDetailComponent } from './components/item-detail/item-detail.component';
-import { ItemGridComponent } from './components/item-grid/item-grid.component';
 import { ItemFilterComponent } from './components/item-filter/item-filter.component';
-
-// Vault routes
-const routes: Routes = [
-  { path: '', component: VaultComponent },
-  { path: 'item/:id', component: ItemDetailComponent }
-];
+import { ItemDetailComponent } from './components/item-detail/item-detail.component';
+import { VAULT_ROUTES } from './vault.routes';
 
 @NgModule({
   imports: [
     CommonModule,
-    FormsModule,
-    RouterModule.forChild(routes)
-  ],
-  exports: [
-    RouterModule
+    HttpClientModule,
+    ReactiveFormsModule,
+    RouterModule.forChild(VAULT_ROUTES),
+    // Import standalone components instead of declaring them
+    VaultComponent,
+    ItemFilterComponent,
+    ItemDetailComponent
   ]
 })
 export class VaultModule { }

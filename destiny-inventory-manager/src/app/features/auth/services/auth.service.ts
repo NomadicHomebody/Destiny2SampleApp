@@ -16,7 +16,7 @@ export class AuthService {
   private tokenExpirationTimer: any;
 
   constructor(
-    private http: HttpClient,
+    private http: HttpClient, // Direct injection instead of using inject()
     private router: Router,
     @Inject(PLATFORM_ID) private platformId: Object
   ) {
