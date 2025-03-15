@@ -15,6 +15,7 @@ import { environment } from '../../../../environments/environment';
         <div class="debug-actions">
           <button (click)="clearLogs()" class="clear-btn">Clear</button>
           <button (click)="copyLogs()" class="copy-btn">Copy</button>
+          <button (click)="exportLogs()" class="export-btn">Export</button>
           <button (click)="toggleVisible()" class="close-btn">Close</button>
         </div>
       </div>
@@ -39,6 +40,13 @@ import { environment } from '../../../../environments/environment';
                 (change)="toggleLevel(logLevels.DEBUG)">
           Debug
         </label>
+        
+        <div class="emitter-status">
+          <span class="emitter-label">Emitters:</span>
+          <span class="emitter-badge" [class.active]="emitters.console">Console</span>
+          <span class="emitter-badge" [class.active]="emitters.remote">Remote</span>
+          <span class="emitter-badge" [class.active]="emitters.file">File</span>
+        </div>
       </div>
       <div class="debug-content">
         <div *ngFor="let log of filteredLogs" class="log-entry" [ngClass]="'level-' + log.level.toLowerCase()">
@@ -57,7 +65,13 @@ import { environment } from '../../../../environments/environment';
           No logs to display
         </div>
       </div>
-      <div class="debug-trigger" (click)="toggleVisible()" *ngIf="!visible">Debug</div>
+      <div class="config-info">
+        <span>Min Level: <strong>{{ minLogLevel }}</strong></span>
+        <span>App Version: <strong>{{ appVersion }}</strong></span>
+      </div>
+    </div>
+    <div class="debug-trigger" (click)="toggleVisible()" *ngIf="!visible">
+      Debug <span class="log-count" *ngIf="logs.length">{{ logs.length }}</span>
     </div>
   `,
   styles: [`
@@ -112,7 +126,7 @@ import { environment } from '../../../../environments/environment';
       background-color: #d35400;
     }
     
-    .copy-btn:hover {
+    .copy-btn:hover, .export-btn:hover {
       background-color: #3498db;
     }
     
@@ -126,6 +140,8 @@ import { environment } from '../../../../environments/environment';
       padding: 0.5rem 1rem;
       background-color: #222;
       border-bottom: 1px solid #444;
+      flex-wrap: wrap;
+      align-items: center;
     }
     
     .debug-filters label {
@@ -134,6 +150,31 @@ import { environment } from '../../../../environments/environment';
       gap: 0.5rem;
       font-size: 0.8rem;
       cursor: pointer;
+    }
+    
+    .emitter-status {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .emitter-label {
+      font-size: 0.8rem;
+      color: #aaa;
+    }
+    
+    .emitter-badge {
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+      background-color: #333;
+      color: #999;
+      font-size: 0.7rem;
+    }
+    
+    .emitter-badge.active {
+      background-color: #2ecc71;
+      color: #fff;
     }
     
     .debug-content {
@@ -247,6 +288,16 @@ import { environment } from '../../../../environments/environment';
       font-style: italic;
     }
     
+    .config-info {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 1rem;
+      background-color: #222;
+      border-top: 1px solid #444;
+      font-size: 0.8rem;
+      color: #aaa;
+    }
+    
     .debug-trigger {
       position: fixed;
       bottom: 10px;
@@ -258,10 +309,26 @@ import { environment } from '../../../../environments/environment';
       cursor: pointer;
       font-size: 0.8rem;
       z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     
     .debug-trigger:hover {
       background-color: rgba(20, 20, 20, 0.9);
+    }
+    
+    .log-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      background-color: #e74c3c;
+      color: white;
+      border-radius: 9px;
+      font-size: 0.7rem;
+      padding: 0 4px;
     }
   `]
 })
@@ -285,6 +352,15 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
   // UI state
   visible = false;
   
+  // Environment configuration
+  minLogLevel = environment.logging?.minLevel || 'DEBUG';
+  appVersion = environment.logging?.appVersion || '1.0.0';
+  emitters = {
+    console: environment.logging?.emitters?.console || true,
+    remote: environment.logging?.emitters?.remote || false,
+    file: environment.logging?.emitters?.file || false
+  };
+  
   // Subscriptions
   private subscription = new Subscription();
   
@@ -299,8 +375,11 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
       // Load logs from localStorage
       this.loadSavedLogs();
       
-      // Show by default in dev mode
-      this.visible = !environment.production;
+      // Show by default in dev mode or if there are errors
+      this.visible = !environment.production && 
+        (this.logs.some(log => log.level === LogLevel.ERROR) || 
+        this.logs.some(log => log.level === LogLevel.FATAL));
+      
       this.applyFilters();
     }
   }
@@ -350,6 +429,12 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
         console.error('Failed to copy logs: ', err);
       });
   }
+  
+  exportLogs(): void {
+    if (isPlatformBrowser(this.platformId)) {
+      this.loggingService.exportLogs();
+    }
+  }
 
   formatTime(timestamp: string): string {
     try {
@@ -373,14 +458,12 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
     if (!isPlatformBrowser(this.platformId)) return;
     
     try {
-      const storedLogs = localStorage.getItem('error_logs');
-      if (storedLogs) {
-        const parsedLogs = JSON.parse(storedLogs);
-        this.logs = parsedLogs.map((log: LogEntry) => ({
-          ...log,
-          expanded: false
-        }));
-      }
+      // Use the loggingService to get stored logs
+      const storedLogs = this.loggingService.getStoredLogs();
+      this.logs = storedLogs.map((log: LogEntry) => ({
+        ...log,
+        expanded: false
+      }));
     } catch (e) {
       console.error('Failed to load saved logs:', e);
     }
