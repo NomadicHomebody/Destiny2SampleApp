@@ -1,10 +1,13 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ElementRef, ViewChild, Inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { map, catchError, switchMap } from 'rxjs/operators';
+import { throwError } from 'rxjs';
+import { LoggingService } from '../../../../core/services/logging.service';
 
 @Component({
   selector: 'app-callback',
@@ -28,6 +31,7 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
     private router: Router,
     private http: HttpClient,
     private elementRef: ElementRef,
+    private loggingService: LoggingService,
     @Inject(PLATFORM_ID) private platformId: Object
   ) {}
   
@@ -169,6 +173,17 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
       particle.draw(this.ctx);
     }
   }
+  
+  private getRedirectUrl(): string {
+    if (!isPlatformBrowser(this.platformId)) return environment.bungie.redirectUrl;
+    
+    const config = environment.bungie.redirectConfig;
+    if (!config) return environment.bungie.redirectUrl;
+    
+    const protocol = window.location.protocol.replace(':', '');
+    const host = window.location.host;
+    return `${protocol}://${host}${config.path || '/auth/callback'}`;
+  }
 
   private getAccessToken(code: string, state: string): void {
     const redirectUrl = environment.bungie.redirectConfig?.useCurrentHost ?
@@ -182,18 +197,164 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
       redirect_uri: redirectUrl
     };
   
-    // Rest of the method remains the same...
+    // Make the token request
+    this.http.post<any>(
+      environment.bungie.tokenUrl, 
+      tokenRequest, 
+      { headers: new HttpHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }) }
+    ).pipe(
+      map(response => {
+        // Transform to URL encoded form data
+        const body = new URLSearchParams();
+        Object.keys(tokenRequest).forEach(key => {
+          body.set(key, tokenRequest[key as keyof typeof tokenRequest]);
+        });
+        
+        return this.http.post<any>(
+          environment.bungie.tokenUrl,
+          body.toString(),
+          { headers: new HttpHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }) }
+        );
+      }),
+      switchMap(tokenObservable => tokenObservable),
+      catchError(error => {
+        this.loggingService.error(
+          'CallbackComponent',
+          'Failed to exchange authorization code for token',
+          error,
+          'AUTH_TOKEN_EXCHANGE_FAILED',
+          { code: 'REDACTED' }
+        );
+        this.error = 'Authentication failed: Unable to retrieve token';
+        this.processing = false;
+        return throwError(() => error);
+      })
+    ).subscribe({
+      next: (tokenResponse) => {
+        this.loggingService.info('CallbackComponent', 'Successfully retrieved token');
+        
+        // Store token in localStorage
+        localStorage.setItem('authToken', tokenResponse.access_token);
+        localStorage.setItem('refreshToken', tokenResponse.refresh_token);
+        localStorage.setItem('tokenExpiry', (Date.now() + (tokenResponse.expires_in * 1000)).toString());
+        
+        // Get user memberships to store primary membership info
+        this.getUserMemberships(tokenResponse.access_token);
+      },
+      error: (err) => {
+        this.error = 'Authentication failed: Unable to retrieve token';
+        this.processing = false;
+        this.loggingService.error(
+          'CallbackComponent',
+          'Token request failed',
+          err,
+          'AUTH_TOKEN_REQUEST_FAILED'
+        );
+      }
+    });
   }
   
-  private getRedirectUrl(): string {
-    if (!isPlatformBrowser(this.platformId)) return environment.bungie.redirectUrl;
-    
-    const config = environment.bungie.redirectConfig;
-    if (!config) return environment.bungie.redirectUrl;
-    
-    const protocol = window.location.protocol.replace(':', '');
-    const host = window.location.host;
-    return `${protocol}://${host}${config.path || '/auth/callback'}`;
+  private getUserMemberships(token: string): void {
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`,
+      'X-API-Key': environment.bungie.apiKey
+    });
+  
+    this.http.get<any>(
+      `${environment.bungie.apiRoot}/User/GetMembershipsForCurrentUser/`, 
+      { headers }
+    ).subscribe({
+      next: (response) => {
+        try {
+          const data = response.Response;
+          
+          // Store membership info for later use
+          if (data.destinyMemberships && data.destinyMemberships.length > 0) {
+            const primaryMembership = data.destinyMemberships[0];
+            localStorage.setItem('membershipId', primaryMembership.membershipId);
+            localStorage.setItem('membershipType', primaryMembership.membershipType.toString());
+            
+            // Get characters for this membership
+            this.getCharacters(token, primaryMembership.membershipType, primaryMembership.membershipId);
+          } else {
+            this.loggingService.warn(
+              'CallbackComponent',
+              'No Destiny memberships found for user'
+            );
+            this.redirectToVault();
+          }
+        } catch (error) {
+          this.loggingService.error(
+            'CallbackComponent',
+            'Error processing user memberships data',
+            error,
+            'AUTH_MEMBERSHIP_PROCESSING_ERROR'
+          );
+          this.redirectToVault();
+        }
+      },
+      error: (err) => {
+        this.loggingService.error(
+          'CallbackComponent',
+          'Failed to retrieve user memberships',
+          err,
+          'AUTH_GET_MEMBERSHIPS_FAILED'
+        );
+        this.redirectToVault();
+      }
+    });
+  }
+  
+  private getCharacters(token: string, membershipType: number, membershipId: string): void {
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`,
+      'X-API-Key': environment.bungie.apiKey
+    });
+  
+    this.http.get<any>(
+      `${environment.bungie.apiRoot}/Destiny2/${membershipType}/Profile/${membershipId}/?components=200`,
+      { headers }
+    ).subscribe({
+      next: (response) => {
+        try {
+          const data = response.Response;
+          if (data.characters && data.characters.data) {
+            const characterIds = Object.keys(data.characters.data);
+            if (characterIds.length > 0) {
+              // Store the first character ID
+              localStorage.setItem('characterId', characterIds[0]);
+              this.loggingService.info(
+                'CallbackComponent',
+                'Successfully retrieved character information',
+                { characterCount: characterIds.length }
+              );
+            }
+          }
+        } catch (error) {
+          this.loggingService.error(
+            'CallbackComponent',
+            'Error processing character data',
+            error,
+            'AUTH_CHARACTER_PROCESSING_ERROR'
+          );
+        }
+        this.redirectToVault();
+      },
+      error: (err) => {
+        this.loggingService.error(
+          'CallbackComponent',
+          'Failed to retrieve character data',
+          err,
+          'AUTH_GET_CHARACTERS_FAILED'
+        );
+        this.redirectToVault();
+      }
+    });
+  }
+  
+  private redirectToVault(): void {
+    this.loggingService.info('CallbackComponent', 'Redirecting to vault page');
+    this.router.navigate(['/vault']);
   }
 }
 
