@@ -1,6 +1,8 @@
-<!-- src/app/core/components/debug-console/debug-console.component.html -->
-<div class="debug-console" *ngIf="visible">
-    <div class="debug-header">
+<div class="debug-console" *ngIf="visible" [ngClass]="{'maximized': isMaximized}">
+  <div class="resize-handle-top-left" title="Resize console"></div>
+  <div class="resize-handle-bottom-left" title="Resize console"></div>
+  
+  <div class="debug-header">
       <div class="title-area">
         <h3>Debug Console</h3>
         <span class="version-badge">v{{appVersion}}</span>
@@ -27,7 +29,6 @@
           <span class="icon">{{ isMaximized ? '🗗' : '🗖' }}</span>
         </button>
       </div>
-      <div class="debug-console" *ngIf="visible" [ngClass]="{'maximized': isMaximized}"></div>
     </div>
     
     <div class="tabs">
@@ -91,5 +92,3 @@
     <span class="log-count" *ngIf="errorCount">{{ errorCount }}</span>
     <span class="offline-indicator" *ngIf="!isOnline">🔴</span>
   </div>
-
-  <div class="resize-handle" title="Resize console"></div>

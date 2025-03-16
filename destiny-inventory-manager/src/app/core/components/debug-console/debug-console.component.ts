@@ -1,4 +1,6 @@
-import { Component, OnInit, OnDestroy, Inject, PLATFORM_ID } from '@angular/core';
+// src/app/core/components/debug-console/debug-console.component.ts
+
+import { Component, OnInit, OnDestroy, Inject, PLATFORM_ID, ElementRef, AfterViewInit } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LoggingService, LogEntry, LogLevel } from '../../services/logging.service';
@@ -24,13 +26,13 @@ import { DebugConsoleService } from './services/debug-console.service';
   templateUrl: './debug-console.component.html',
   styleUrls: ['./debug-console.component.css']
 })
-export class DebugConsoleComponent implements OnInit, OnDestroy {
+export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
   // Store a reference to LogLevel enum for template usage
   logLevels = LogLevel;
   objectKeys = Object.keys;
   
   isMaximized = false;
-  
+
   // Logs storage
   logs: EnhancedLogEntry[] = [];
   filteredLogs: EnhancedLogEntry[] = [];
@@ -95,7 +97,8 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
   constructor(
     private loggingService: LoggingService,
     private debugConsoleService: DebugConsoleService,
-    @Inject(PLATFORM_ID) private platformId: Object
+    @Inject(PLATFORM_ID) private platformId: Object,
+    private elementRef: ElementRef // Add ElementRef injection
   ) {}
 
   ngOnInit(): void {
@@ -141,6 +144,29 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
         
         this.applyFilters();
         }
+        console.log('Debug console initializing...'); // Add debugging
+  
+        // Try forcing visibility
+        setTimeout(() => {
+          this.visible = true;
+          console.log('Debug console visible state:', this.visible);
+        }, 1000);
+    }
+
+    ngAfterViewInit(): void {
+      if (isPlatformBrowser(this.platformId)) {
+        // Set up resize handle interactions
+        const topLeftHandle = this.elementRef.nativeElement.querySelector('.resize-handle-top-left');
+        const bottomLeftHandle = this.elementRef.nativeElement.querySelector('.resize-handle-bottom-left');
+        
+        if (topLeftHandle) {
+          this.setupResizeHandlers(topLeftHandle);
+        }
+        
+        if (bottomLeftHandle) {
+          this.setupResizeHandlers(bottomLeftHandle);
+        }
+      }
     }
 
   ngOnDestroy(): void {
@@ -151,9 +177,40 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
     }
   }
 
+  private setupResizeHandlers(handle: HTMLElement): void {
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Get the console element
+      const consoleElement = this.elementRef.nativeElement.querySelector('.debug-console');
+      if (!consoleElement) return;
+      
+      // Make sure the pointer-events are set correctly during resize
+      document.body.style.pointerEvents = 'none';
+      handle.style.pointerEvents = 'auto';
+      
+      // Reset after resize is done
+      const handleMouseUp = () => {
+        document.body.style.pointerEvents = '';
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('mousemove', handleMouseMove);
+      };
+      
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        // Just let the browser's built-in resize work
+        // This is just to ensure proper event capture
+      };
+      
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mousemove', handleMouseMove);
+    });
+  }
+
   toggleVisible(): void {
     this.visible = !this.visible;
   }
+  
 
   toggleLevel(level: LogLevel): void {
     this.showLevel[level] = !this.showLevel[level];

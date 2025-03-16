@@ -1,5 +1,3 @@
-/* src/app/core/components/debug-console/debug-console.component.css */
-/* Main container styles */
 .debug-console {
   position: fixed;
   bottom: 0;
@@ -17,14 +15,63 @@
   font-family: monospace;
   transition: all 0.3s ease;
   
-  /* Add resize properties */
+  /* Adjust resize property for left-sided resizing */
   resize: both;
-  overflow: hidden; /* Important: Keep this as hidden to only show scrollbars where we want them */
+  overflow: hidden;
   min-width: 400px;
   min-height: 300px;
   max-height: 95vh;
   max-width: 95vw;
 }
+
+.debug-console::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-top: 1px solid rgba(230, 126, 34, 0.3);
+  border-left: 1px solid rgba(230, 126, 34, 0.3);
+  pointer-events: none; /* Make it non-interactive */
+}
+
+.debug-console::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-bottom: 1px solid rgba(230, 126, 34, 0.3);
+  border-left: 1px solid rgba(230, 126, 34, 0.3);
+  pointer-events: none; /* Make it non-interactive */
+}
+
+.resize-handle-top-left {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  top: 0;
+  left: 0;
+  cursor: nwse-resize; /* Diagonal resize cursor */
+  background-color: transparent; /* Make invisible */
+  opacity: 0; /* Completely invisible */
+  z-index: 10000; /* Ensure it's above other elements */
+}
+
+.resize-handle-bottom-left {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize; /* Diagonal resize cursor */
+  background-color: transparent; /* Make invisible */
+  opacity: 0; /* Completely invisible */
+  z-index: 10000; /* Ensure it's above other elements */
+}
+
   
   /* Header styles */
   .debug-header {
@@ -224,15 +271,9 @@
   }
 
   .resize-handle {
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    bottom: 0;
-    right: 0;
-    cursor: nwse-resize;
-    background-color: #333;
-    border-top-left-radius: 3px;
+    display: none;
   }
+  
 
   .debug-console.maximized {
     width: 95vw !important;
