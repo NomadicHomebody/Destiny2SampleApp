@@ -2,9 +2,9 @@
   position: fixed;
   bottom: 0;
   right: 0;
-  width: 90%;
+  width: 45%; /* Changed from 90% to 45% */
   max-width: 700px;
-  height: 70%;
+  height: 35%; /* Changed from 70% to 35% */
   background-color: rgba(20, 20, 20, 0.97);
   color: #f5f5f5;
   z-index: 9999;
@@ -53,10 +53,10 @@
 .resize-handle-top-left,
 .resize-handle-bottom-left {
   position: absolute;
-  width: 12px;
-  height: 12px;
+  width: 16px; /* Increased from 12px to 16px for easier grabbing */
+  height: 16px; /* Increased from 12px to 16px */
   z-index: 10001; /* Higher than the console */
-  background-color: rgba(230, 126, 34, 0.2); /* Slightly visible orange */
+  background-color: rgba(230, 126, 34, 0.3); /* More visible */
   opacity: 0.7; /* Make them visible */
 }
 
@@ -75,7 +75,7 @@
 
 .resize-handle-top-left:hover,
 .resize-handle-bottom-left:hover {
-  background-color: rgba(230, 126, 34, 0.5); /* More visible on hover */
+  background-color: rgba(230, 126, 34, 0.7); /* More visible on hover */
 }
   
 /* Header styles */
@@ -275,6 +275,7 @@
   font-size: 0.7rem;
 }
 
+/* Remove this rule if it's preventing proper functionality */
 .resize-handle {
   display: none;
 }

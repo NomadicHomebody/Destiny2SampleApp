@@ -1,5 +1,3 @@
-// src/app/core/components/debug-console/debug-console.component.ts
-
 import { Component, OnInit, OnDestroy, Inject, PLATFORM_ID, ElementRef, AfterViewInit, Renderer2, HostListener } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -52,7 +50,7 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
   
   sourceFilter = '';
   
-  // UI state
+  // UI state - Set initial visibility to false
   visible = false;
   activeTab = 'logs';
   currentTime = '';
@@ -107,7 +105,7 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
     private debugConsoleService: DebugConsoleService,
     @Inject(PLATFORM_ID) private platformId: Object,
     private elementRef: ElementRef,
-    private renderer: Renderer2 // Add renderer for better DOM manipulation
+    private renderer: Renderer2
   ) {}
 
   ngOnInit(): void {
@@ -144,22 +142,15 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
       // Check for offline logs count
       this.checkOfflineLogs();
       
-      // Show by default in dev mode or if there are errors
-      this.visible = !environment.production && 
-      (this.logs.some(log => log.level === LogLevel.DEBUG) ||
-      this.logs.some(log => log.level === LogLevel.INFO) ||
-      this.logs.some(log => log.level === LogLevel.ERROR) || 
-      this.logs.some(log => log.level === LogLevel.FATAL));
+      // Show only if there are errors, not by default
+      this.visible = (this.logs.some(log => log.level === LogLevel.ERROR) || 
+                     this.logs.some(log => log.level === LogLevel.FATAL));
       
       this.applyFilters();
     }
-    console.log('Debug console initializing...'); // Add debugging
-  
-    // Try forcing visibility
-    setTimeout(() => {
-      this.visible = true;
-      console.log('Debug console visible state:', this.visible);
-    }, 1000);
+    console.log('Debug console initializing...'); 
+    
+    // Removed the setTimeout that forced visibility to true
   }
 
   ngAfterViewInit(): void {
@@ -273,6 +264,8 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
       
       // Function to handle mouse movement
       const handleMouseMove = (moveEvent: MouseEvent) => {
+        moveEvent.preventDefault(); // Prevent text selection during resize
+        
         // Calculate how much the mouse has moved
         const deltaX = startX - moveEvent.clientX;
         const deltaY = type === 'topleft' ? startY - moveEvent.clientY : moveEvent.clientY - startY;
@@ -280,31 +273,20 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
         // Update width based on horizontal movement
         let newWidth = startWidth + deltaX;
         
-        // Enforce minimum width
-        newWidth = Math.max(400, newWidth);
+        // Enforce minimum width and maximum width
+        newWidth = Math.max(400, Math.min(newWidth, window.innerWidth * 0.95));
         
         // Apply new width
         this.renderer.setStyle(consoleElement, 'width', `${newWidth}px`);
         
-        // For top-left handle, also update height
-        if (type === 'topleft') {
-          let newHeight = startHeight + deltaY;
-          
-          // Enforce minimum height
-          newHeight = Math.max(300, newHeight);
-          
-          // Apply new height
-          this.renderer.setStyle(consoleElement, 'height', `${newHeight}px`);
-        } else {
-          // For bottom-left, update height in the opposite direction
-          let newHeight = startHeight + deltaY;
-          
-          // Enforce minimum height
-          newHeight = Math.max(300, newHeight);
-          
-          // Apply new height
-          this.renderer.setStyle(consoleElement, 'height', `${newHeight}px`);
-        }
+        // Update height based on vertical movement
+        let newHeight = startHeight + deltaY;
+        
+        // Enforce minimum height and maximum height
+        newHeight = Math.max(300, Math.min(newHeight, window.innerHeight * 0.95));
+        
+        // Apply new height
+        this.renderer.setStyle(consoleElement, 'height', `${newHeight}px`);
       };
       
       // Function to clean up event listeners
