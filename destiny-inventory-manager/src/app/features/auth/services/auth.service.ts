@@ -2,7 +2,7 @@ import { Injectable, Inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient, HttpHeaders, HttpErrorResponse } from '@angular/common/http';
 import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
-import { catchError, map, tap, finalize } from 'rxjs/operators';
+import { catchError, map, tap, finalize, retry, delay } from 'rxjs/operators';
 import { Router } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { AuthToken, BungieUser } from '../models/auth.models';
@@ -16,6 +16,7 @@ export class AuthService {
   public currentUser$ = this.currentUserSubject.asObservable();
   private tokenExpirationTimer: any;
   private isAuthenticating = false; // Flag to prevent concurrent auth attempts
+  private profileLoadAttempted = false; // Flag to track profile loading attempts
 
   constructor(
     private http: HttpClient,
@@ -171,6 +172,7 @@ export class AuthService {
     }
     
     this.currentUserSubject.next(null);
+    this.profileLoadAttempted = false;
     
     if (this.tokenExpirationTimer) {
       clearTimeout(this.tokenExpirationTimer);
@@ -181,28 +183,57 @@ export class AuthService {
 
   private storeToken(token: AuthToken): void {
     if (this.isBrowser()) {
-      localStorage.setItem('authToken', JSON.stringify(token));
+      // Store token data
+      localStorage.setItem('authToken', token.access_token);
+      localStorage.setItem('tokenType', token.token_type);
       localStorage.setItem('refreshToken', token.refresh_token);
       localStorage.setItem('membershipId', token.membership_id);
+      
+      // Store token object for debugging
+      try {
+        localStorage.setItem('tokenObject', JSON.stringify(token));
+      } catch (e) {
+        this.loggingService.warn('AuthService', 'Could not stringify token object', e);
+      }
       
       // Calculate expiration time
       const expiresIn = token.expires_in * 1000;
       const expiryTime = new Date().getTime() + expiresIn;
       localStorage.setItem('tokenExpiry', expiryTime.toString());
       
+      this.loggingService.info('AuthService', 'Token stored successfully', {
+        hasMembershipId: !!token.membership_id,
+        expiresIn: `${token.expires_in} seconds`,
+        expiryTime: new Date(expiryTime).toISOString()
+      });
+      
       // Set up automatic logout when token expires
       this.autoLogout(expiresIn);
     }
     
-    this.getUserProfile().subscribe({
+    // Attempt to load the user profile with retry logic
+    this.getUserProfile().pipe(
+      retry({ count: 3, delay: 1000 }), // Retry 3 times with 1 second delay
+    ).subscribe({
       next: user => {
+        this.profileLoadAttempted = true;
         this.currentUserSubject.next(user);
         this.loggingService.info('AuthService', 'User profile loaded', {
-          username: user.displayName
+          username: user.displayName,
+          membershipId: user.membershipId
         });
       },
       error: err => {
-        this.loggingService.error('AuthService', 'Failed to load user profile', err);
+        this.profileLoadAttempted = true;
+        this.loggingService.warn('AuthService', 'Token obtained but profile loading failed', {
+          hasMembershipId: !!token.membership_id
+        });
+        
+        // Even if profile loading fails, we can safely navigate to vault 
+        // as long as we have a valid token and membership ID
+        if (token.membership_id) {
+          this.router.navigate(['/vault']);
+        }
       }
     });
   }
@@ -221,18 +252,17 @@ export class AuthService {
 
   private checkStoredToken(): void {
     if (this.isBrowser()) {
-      const authDataString = localStorage.getItem('authToken');
-      if (!authDataString) return;
-
+      const token = localStorage.getItem('authToken');
+      const membershipId = localStorage.getItem('membershipId');
+      const expiryTimeString = localStorage.getItem('tokenExpiry');
+      
+      if (!token || !membershipId || !expiryTimeString) {
+        this.loggingService.debug('AuthService', 'Missing token data, cleaning up');
+        this.logout();
+        return;
+      }
+      
       try {
-        const token: AuthToken = JSON.parse(authDataString);
-        const expiryTimeString = localStorage.getItem('tokenExpiry');
-        
-        if (!expiryTimeString) {
-          this.logout();
-          return;
-        }
-        
         const expiryTime = parseInt(expiryTimeString, 10);
         const now = new Date().getTime();
         
@@ -242,46 +272,125 @@ export class AuthService {
           return;
         }
         
+        this.loggingService.info('AuthService', 'Found valid token', {
+          hasMembershipId: !!membershipId,
+          expiresAt: new Date(expiryTime).toISOString()
+        });
+        
         // Set up auto-logout for the remaining time
         const timeRemaining = expiryTime - now;
         this.autoLogout(timeRemaining);
         
-        // Load user profile
-        this.getUserProfile().subscribe();
+        // Load user profile if not already loaded
+        if (!this.profileLoadAttempted) {
+          this.getUserProfile().subscribe({
+            error: err => {
+              this.profileLoadAttempted = true;
+              this.loggingService.warn('AuthService', 'Stored token valid but profile loading failed');
+              // Don't logout, still let them use the app
+            }
+          });
+        }
       } catch (error) {
-        this.loggingService.error('AuthService', 'Failed to parse stored token', error);
+        this.loggingService.error('AuthService', 'Failed to parse stored token data', error);
         this.logout();
       }
     }
   }
 
-  private getToken(): string {
+  public getToken(): string {
     if (this.isBrowser()) {
-      const authDataString = localStorage.getItem('authToken');
-      if (authDataString) {
-        try {
-          const token: AuthToken = JSON.parse(authDataString);
-          return token.access_token;
-        } catch (error) {
-          this.loggingService.error('AuthService', 'Failed to parse token', error);
-        }
-      }
+      return localStorage.getItem('authToken') || '';
     }
     return '';
   }
 
+  public getMembershipId(): string | null {
+    if (this.isBrowser()) {
+      return localStorage.getItem('membershipId');
+    }
+    return null;
+  }
+
   private getUserProfile(): Observable<BungieUser> {
+    const token = this.getToken();
+    const membershipId = this.getMembershipId();
+    
+    if (!token || !membershipId) {
+      this.loggingService.warn('AuthService', 'Attempted to get user profile without valid token/membershipId');
+      return throwError(() => new Error('No authentication token or membership ID available'));
+    }
+    
     const headers = new HttpHeaders({
       'X-API-Key': environment.bungie.apiKey,
-      'Authorization': `Bearer ${this.getToken()}`
+      'Authorization': `Bearer ${token}`
     });
     
-    return this.http.get<{ Response: BungieUser }>(
+    this.loggingService.debug('AuthService', 'Requesting user profile', {
+      url: `${environment.bungie.apiRoot}/User/GetCurrentBungieNetUser/`,
+      hasMembershipId: !!membershipId,
+      hasToken: !!token
+    });
+    
+    return this.http.get<any>(
       `${environment.bungie.apiRoot}/User/GetCurrentBungieNetUser/`,
       { headers }
     ).pipe(
-      map(response => response.Response),
-      tap(user => this.currentUserSubject.next(user))
+      tap(response => {
+        this.loggingService.debug('AuthService', 'Got raw profile response', {
+          hasResponse: !!response,
+          responseKeys: response ? Object.keys(response) : [],
+          hasResponseData: !!response?.Response
+        });
+      }),
+      map(response => {
+        if (!response || !response.Response) {
+          throw new Error('Invalid profile response format');
+        }
+        return response.Response;
+      }),
+      tap(user => {
+        if (!user.membershipId) {
+          // If API didn't return membershipId, use the one from token
+          user.membershipId = membershipId;
+        }
+        this.currentUserSubject.next(user);
+      }),
+      catchError((error: HttpErrorResponse) => {
+        const statusCode = error.status;
+        const errorBody = error.error;
+        
+        this.loggingService.error(
+          'AuthService',
+          `Failed to load user profile (HTTP ${statusCode})`,
+          error,
+          'USER_PROFILE_ERROR',
+          {
+            status: statusCode,
+            errorBody: errorBody,
+            membershipId: membershipId ? membershipId.substring(0, 5) + '...' : null
+          }
+        );
+        
+        // Create a basic user with just membership ID so app can function
+        if (membershipId) {
+          const fallbackUser: BungieUser = {
+            membershipId: membershipId,
+            displayName: 'Guardian',
+            uniqueName: 'Guardian',
+            membershipType: 0
+          };
+          
+          this.loggingService.info('AuthService', 'Created fallback user profile', {
+            membershipId: membershipId
+          });
+          
+          this.currentUserSubject.next(fallbackUser);
+          return of(fallbackUser);
+        }
+        
+        return throwError(() => error);
+      })
     );
   }
 

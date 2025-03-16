@@ -5,8 +5,8 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { map, catchError, switchMap } from 'rxjs/operators';
-import { throwError } from 'rxjs';
+import { map, catchError, switchMap, finalize } from 'rxjs/operators';
+import { throwError, of, timer } from 'rxjs';
 import { LoggingService } from '../../../../core/services/logging.service';
 import { AuthService } from '../../services/auth.service';
 
@@ -27,6 +27,7 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
   private animationId: number = 0;
   private mouse = { x: 0, y: 0 };
   private codeProcessed = false; // Flag to prevent code reuse
+  private processingTimeout: any = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -34,7 +35,7 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
     private http: HttpClient,
     private elementRef: ElementRef,
     private loggingService: LoggingService,
-    private authService: AuthService, // Add AuthService
+    private authService: AuthService,
     @Inject(PLATFORM_ID) private platformId: Object
   ) {}
   
@@ -44,6 +45,16 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Set a safety timeout to redirect to vault after 8 seconds even if auth is still processing
+    // This helps in case profile loading is slow or fails but token was obtained
+    this.processingTimeout = setTimeout(() => {
+      if (this.processing && isPlatformBrowser(this.platformId) && localStorage.getItem('authToken')) {
+        this.loggingService.warn('CallbackComponent', 'Auth processing timeout reached, redirecting to vault');
+        this.processing = false;
+        this.router.navigate(['/vault']);
+      }
+    }, 8000);
+    
     this.route.queryParams.subscribe(params => {
       const code = params['code'];
       const state = params['state'];
@@ -52,13 +63,26 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
       if (error) {
         this.error = `Authentication failed: ${error}`;
         this.processing = false;
+        this.loggingService.error('CallbackComponent', `Authentication error from Bungie: ${error}`);
         return;
       }
       
       if (!code) {
         this.error = 'No authorization code received from Bungie';
         this.processing = false;
+        this.loggingService.error('CallbackComponent', 'No authorization code in callback URL');
         return;
+      }
+      
+      // Validate state parameter to prevent CSRF
+      if (isPlatformBrowser(this.platformId)) {
+        const storedState = sessionStorage.getItem('auth_state');
+        if (storedState && state !== storedState) {
+          this.error = 'Security validation failed. Please try logging in again.';
+          this.processing = false;
+          this.loggingService.error('CallbackComponent', 'State parameter mismatch', null, 'CSRF_ATTEMPT');
+          return;
+        }
       }
       
       // Prevent code reuse if the page is refreshed
@@ -71,11 +95,16 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
       
       this.codeProcessed = true;
       
-      // Use the AuthService instead of handling the token exchange directly
+      // Use the AuthService to handle the token exchange
       this.authService.handleCallback(code).subscribe({
         next: (success) => {
           if (success) {
             this.loggingService.info('CallbackComponent', 'Authentication successful');
+            // Clear the timeout since we're redirecting now
+            if (this.processingTimeout) {
+              clearTimeout(this.processingTimeout);
+              this.processingTimeout = null;
+            }
             this.router.navigate(['/vault']);
           } else {
             this.error = 'Authentication failed. Please try again.';
@@ -93,6 +122,13 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
             'AUTH_CALLBACK_ERROR',
             { code: 'REDACTED' } // Don't log the actual code
           );
+        },
+        complete: () => {
+          // Clear any timeout to prevent navigation conflicts
+          if (this.processingTimeout) {
+            clearTimeout(this.processingTimeout);
+            this.processingTimeout = null;
+          }
         }
       });
     });
@@ -114,6 +150,12 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
       window.cancelAnimationFrame(this.animationId);
       window.removeEventListener('mousemove', this.handleMouseMove);
       window.removeEventListener('resize', this.handleResize);
+    }
+    
+    // Clear timeout if component is destroyed
+    if (this.processingTimeout) {
+      clearTimeout(this.processingTimeout);
+      this.processingTimeout = null;
     }
   }
   
