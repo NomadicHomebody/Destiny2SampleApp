@@ -22,11 +22,11 @@
                 title="Sync offline logs">
           <span class="icon">🔄</span>
         </button>
-        <button (click)="toggleVisible()" class="action-btn close-btn" title="Close">
-          <span class="icon">✖️</span>
-        </button>
         <button (click)="toggleMaximize()" class="action-btn maximize-btn" [title]="isMaximized ? 'Restore' : 'Maximize'">
           <span class="icon">{{ isMaximized ? '🗗' : '🗖' }}</span>
+        </button>
+        <button (click)="toggleVisible()" class="action-btn close-btn" title="Close">
+          <span class="icon">✖️</span>
         </button>
       </div>
     </div>

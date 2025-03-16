@@ -1,6 +1,6 @@
 // src/app/core/components/debug-console/debug-console.component.ts
 
-import { Component, OnInit, OnDestroy, Inject, PLATFORM_ID, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, PLATFORM_ID, ElementRef, AfterViewInit, Renderer2 } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LoggingService, LogEntry, LogLevel } from '../../services/logging.service';
@@ -98,7 +98,8 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
     private loggingService: LoggingService,
     private debugConsoleService: DebugConsoleService,
     @Inject(PLATFORM_ID) private platformId: Object,
-    private elementRef: ElementRef // Add ElementRef injection
+    private elementRef: ElementRef,
+    private renderer: Renderer2 // Add renderer for better DOM manipulation
   ) {}
 
   ngOnInit(): void {
@@ -160,11 +161,11 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
         const bottomLeftHandle = this.elementRef.nativeElement.querySelector('.resize-handle-bottom-left');
         
         if (topLeftHandle) {
-          this.setupResizeHandlers(topLeftHandle);
+          this.setupResizeHandlers(topLeftHandle, 'topleft');
         }
         
         if (bottomLeftHandle) {
-          this.setupResizeHandlers(bottomLeftHandle);
+          this.setupResizeHandlers(bottomLeftHandle, 'bottomleft');
         }
       }
     }
@@ -177,7 +178,7 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  private setupResizeHandlers(handle: HTMLElement): void {
+  private setupResizeHandlers(handle: HTMLElement, type: 'topleft' | 'bottomleft'): void {
     handle.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -186,24 +187,57 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
       const consoleElement = this.elementRef.nativeElement.querySelector('.debug-console');
       if (!consoleElement) return;
       
-      // Make sure the pointer-events are set correctly during resize
-      document.body.style.pointerEvents = 'none';
-      handle.style.pointerEvents = 'auto';
+      // Store initial state
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startWidth = consoleElement.offsetWidth;
+      const startHeight = consoleElement.offsetHeight;
       
-      // Reset after resize is done
-      const handleMouseUp = () => {
-        document.body.style.pointerEvents = '';
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.removeEventListener('mousemove', handleMouseMove);
-      };
-      
+      // Function to handle mouse movement
       const handleMouseMove = (moveEvent: MouseEvent) => {
-        // Just let the browser's built-in resize work
-        // This is just to ensure proper event capture
+        // Calculate how much the mouse has moved
+        const deltaX = startX - moveEvent.clientX;
+        const deltaY = type === 'topleft' ? startY - moveEvent.clientY : moveEvent.clientY - startY;
+        
+        // Update width based on horizontal movement
+        let newWidth = startWidth + deltaX;
+        
+        // Enforce minimum width
+        newWidth = Math.max(400, newWidth);
+        
+        // Apply new width
+        this.renderer.setStyle(consoleElement, 'width', `${newWidth}px`);
+        
+        // For top-left handle, also update height
+        if (type === 'topleft') {
+          let newHeight = startHeight + deltaY;
+          
+          // Enforce minimum height
+          newHeight = Math.max(300, newHeight);
+          
+          // Apply new height
+          this.renderer.setStyle(consoleElement, 'height', `${newHeight}px`);
+        } else {
+          // For bottom-left, update height in the opposite direction
+          let newHeight = startHeight + deltaY;
+          
+          // Enforce minimum height
+          newHeight = Math.max(300, newHeight);
+          
+          // Apply new height
+          this.renderer.setStyle(consoleElement, 'height', `${newHeight}px`);
+        }
       };
       
-      document.addEventListener('mouseup', handleMouseUp);
+      // Function to clean up event listeners
+      const handleMouseUp = () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+      
+      // Add event listeners for the drag operation
       document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
     });
   }
 
