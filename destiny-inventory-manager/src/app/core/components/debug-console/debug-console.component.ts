@@ -1,6 +1,6 @@
 // src/app/core/components/debug-console/debug-console.component.ts
 
-import { Component, OnInit, OnDestroy, Inject, PLATFORM_ID, ElementRef, AfterViewInit, Renderer2 } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, PLATFORM_ID, ElementRef, AfterViewInit, Renderer2, HostListener } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LoggingService, LogEntry, LogLevel } from '../../services/logging.service';
@@ -12,6 +12,10 @@ import { LogsTabComponent } from './components/logs-tab/logs-tab.component';
 import { FilesTabComponent } from './components/files-tab/files-tab.component';
 import { SettingsTabComponent } from './components/settings-tab/settings-tab.component';
 import { DebugConsoleService } from './services/debug-console.service';
+
+// Session storage key for tracking debug console sessions
+const SESSION_ID_KEY = 'debug_console_session_id';
+const AUTO_CLEAR_ENABLED_KEY = 'debug_console_auto_clear';
 
 @Component({
   selector: 'app-debug-console',
@@ -54,6 +58,10 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
   currentTime = '';
   timeInterval: any;
   isOnline = true;
+  
+  // Auto-clear settings
+  autoClearEnabled = true;
+  sessionId: string = '';
   
   // Configuration from environment
   appVersion = environment.logging?.appVersion || '1.0.0';
@@ -105,76 +113,146 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnInit(): void {
     // Only enable in non-production and only in browser environment
     if (!environment.production && isPlatformBrowser(this.platformId)) {
-        // Load logs from localStorage
-        this.logs = this.debugConsoleService.getStoredLogs();
+      // Initialize session tracking
+      this.initializeSession();
 
-        console.log('Debug console initialized, subscribing to log stream'); // Add this line
+      console.log('Debug console initialized, subscribing to log stream');
 
-        // Set up real-time log updates
-        this.subscription.add(
-            this.loggingService.getLogStream().subscribe(log => {
-            console.log('Log received in debug console:', log); // Add this line
-            this.addLogEntry(log);
-            })
-        );
-        
-        // Update clock
-        this.updateClock();
-        this.timeInterval = setInterval(() => this.updateClock(), 1000);
-        
-        // Check online status
-        this.isOnline = navigator.onLine;
-        
-        window.addEventListener('online', () => {
+      // Set up real-time log updates
+      this.subscription.add(
+        this.loggingService.getLogStream().subscribe(log => {
+          console.log('Log received in debug console:', log);
+          this.addLogEntry(log);
+        })
+      );
+      
+      // Update clock
+      this.updateClock();
+      this.timeInterval = setInterval(() => this.updateClock(), 1000);
+      
+      // Check online status
+      this.isOnline = navigator.onLine;
+      
+      window.addEventListener('online', () => {
         this.isOnline = true;
-        });
-        
-        window.addEventListener('offline', () => {
+      });
+      
+      window.addEventListener('offline', () => {
         this.isOnline = false;
-        });
-        
-        // Check for offline logs count
-        this.checkOfflineLogs();
-        
-        // Show by default in dev mode or if there are errors
-        this.visible = !environment.production && 
-        (this.logs.some(log => log.level === LogLevel.DEBUG) ||
-        this.logs.some(log => log.level === LogLevel.INFO) ||
-        this.logs.some(log => log.level === LogLevel.ERROR) || 
-        this.logs.some(log => log.level === LogLevel.FATAL));
-        
-        this.applyFilters();
-        }
-        console.log('Debug console initializing...'); // Add debugging
-  
-        // Try forcing visibility
-        setTimeout(() => {
-          this.visible = true;
-          console.log('Debug console visible state:', this.visible);
-        }, 1000);
+      });
+      
+      // Check for offline logs count
+      this.checkOfflineLogs();
+      
+      // Show by default in dev mode or if there are errors
+      this.visible = !environment.production && 
+      (this.logs.some(log => log.level === LogLevel.DEBUG) ||
+      this.logs.some(log => log.level === LogLevel.INFO) ||
+      this.logs.some(log => log.level === LogLevel.ERROR) || 
+      this.logs.some(log => log.level === LogLevel.FATAL));
+      
+      this.applyFilters();
     }
+    console.log('Debug console initializing...'); // Add debugging
+  
+    // Try forcing visibility
+    setTimeout(() => {
+      this.visible = true;
+      console.log('Debug console visible state:', this.visible);
+    }, 1000);
+  }
 
-    ngAfterViewInit(): void {
-      if (isPlatformBrowser(this.platformId)) {
-        // Set up resize handle interactions
-        const topLeftHandle = this.elementRef.nativeElement.querySelector('.resize-handle-top-left');
-        const bottomLeftHandle = this.elementRef.nativeElement.querySelector('.resize-handle-bottom-left');
-        
-        if (topLeftHandle) {
-          this.setupResizeHandlers(topLeftHandle, 'topleft');
-        }
-        
-        if (bottomLeftHandle) {
-          this.setupResizeHandlers(bottomLeftHandle, 'bottomleft');
-        }
+  ngAfterViewInit(): void {
+    if (isPlatformBrowser(this.platformId)) {
+      // Set up resize handle interactions
+      const topLeftHandle = this.elementRef.nativeElement.querySelector('.resize-handle-top-left');
+      const bottomLeftHandle = this.elementRef.nativeElement.querySelector('.resize-handle-bottom-left');
+      
+      if (topLeftHandle) {
+        this.setupResizeHandlers(topLeftHandle, 'topleft');
+      }
+      
+      if (bottomLeftHandle) {
+        this.setupResizeHandlers(bottomLeftHandle, 'bottomleft');
       }
     }
+  }
 
   ngOnDestroy(): void {
     this.subscription.unsubscribe();
     
     if (this.timeInterval) {
       clearInterval(this.timeInterval);
+    }
+  }
+
+  /**
+   * Handle browser window unload event to clear logs when user leaves the page
+   */
+  @HostListener('window:beforeunload')
+  onBeforeUnload(): void {
+    // Clear logs when leaving the page if auto-clear is enabled
+    if (this.autoClearEnabled && isPlatformBrowser(this.platformId)) {
+      this.loggingService.debug('DebugConsole', 'Session ending, auto-clearing logs');
+      this.clearLogsInStorage();
+    }
+  }
+
+  /**
+   * Initialize session tracking for debug console
+   */
+  private initializeSession(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+
+    // Load auto-clear setting
+    const storedAutoClearSetting = localStorage.getItem(AUTO_CLEAR_ENABLED_KEY);
+    if (storedAutoClearSetting !== null) {
+      this.autoClearEnabled = storedAutoClearSetting === 'true';
+    }
+
+    // Generate a new unique session ID
+    this.sessionId = this.generateSessionId();
+    
+    // Check if we have a different previous session
+    const previousSessionId = sessionStorage.getItem(SESSION_ID_KEY);
+    
+    if (previousSessionId && previousSessionId !== this.sessionId) {
+      // We have a new session, clear logs if auto-clear is enabled
+      if (this.autoClearEnabled) {
+        this.loggingService.debug('DebugConsole', 'New session detected, auto-clearing logs', {
+          previousSession: previousSessionId,
+          newSession: this.sessionId
+        });
+        this.clearLogsInStorage();
+      }
+    }
+    
+    // Store the current session ID
+    sessionStorage.setItem(SESSION_ID_KEY, this.sessionId);
+    
+    // Load logs after session handling
+    this.logs = this.debugConsoleService.getStoredLogs();
+  }
+
+  /**
+   * Generate a unique session ID
+   */
+  private generateSessionId(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substring(2);
+  }
+
+  /**
+   * Toggle auto-clear setting
+   */
+  public toggleAutoClear(): void {
+    this.autoClearEnabled = !this.autoClearEnabled;
+    
+    if (isPlatformBrowser(this.platformId)) {
+      localStorage.setItem(AUTO_CLEAR_ENABLED_KEY, this.autoClearEnabled.toString());
+      
+      this.loggingService.info('DebugConsole', 'Auto-clear logs setting changed', {
+        enabled: this.autoClearEnabled
+      });
     }
   }
 
@@ -245,16 +323,28 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
     this.visible = !this.visible;
   }
   
-
   toggleLevel(level: LogLevel): void {
     this.showLevel[level] = !this.showLevel[level];
     this.applyFilters();
   }
 
+  /**
+   * Clear logs from memory and storage
+   */
   clearLogs(): void {
+    // Clear in-memory logs
     this.logs = [];
     this.applyFilters();
     
+    this.clearLogsInStorage();
+    
+    this.loggingService.info('DebugConsole', 'Logs cleared by user');
+  }
+
+  /**
+   * Clear logs in storage only
+   */
+  private clearLogsInStorage(): void {
     // Clear local storage - only in browser
     if (isPlatformBrowser(this.platformId)) {
       localStorage.removeItem('error_logs');

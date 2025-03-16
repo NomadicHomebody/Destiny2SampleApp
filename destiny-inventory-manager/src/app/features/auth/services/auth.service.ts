@@ -17,6 +17,7 @@ export class AuthService {
   private tokenExpirationTimer: any;
   private isAuthenticating = false; // Flag to prevent concurrent auth attempts
   private profileLoadAttempted = false; // Flag to track profile loading attempts
+  private inCallbackRoute = false; // Track if we're in the callback route
 
   constructor(
     private http: HttpClient,
@@ -25,8 +26,33 @@ export class AuthService {
     @Inject(PLATFORM_ID) private platformId: Object
   ) {
     if (this.isBrowser()) {
-      this.checkStoredToken();
+      // Check if we're in the callback route to avoid token validation during code exchange
+      this.inCallbackRoute = this.isCallbackRoute();
+      
+      if (this.inCallbackRoute) {
+        this.loggingService.debug('AuthService', 'Initializing auth service in callback route - skipping token validation');
+      } else {
+        this.loggingService.debug('AuthService', 'Initializing auth service - checking stored token');
+        this.checkStoredToken();
+      }
     }
+  }
+
+  /**
+   * Check if we're currently in the callback route
+   */
+  private isCallbackRoute(): boolean {
+    if (this.isBrowser()) {
+      const currentPath = window.location.pathname;
+      const currentSearch = window.location.search;
+      
+      // Check if we're in the callback route with a code parameter
+      return (
+        currentPath.includes('/auth/callback') && 
+        currentSearch.includes('code=')
+      );
+    }
+    return false;
   }
 
   private isBrowser(): boolean {
@@ -65,7 +91,7 @@ export class AuthService {
       const authUrl = `${environment.bungie.authUrl}?client_id=${encodeURIComponent(String(environment.bungie.clientId))}&response_type=code&redirect_uri=${encodeURIComponent(redirectUrl)}&state=${state}`;
       
       this.loggingService.info('AuthService', 'Redirecting to Bungie authorization', {
-        authUrl: authUrl.replace(String(environment.bungie.clientId), '[REDACTED]')
+        authUrl: authUrl.replace(String(environment.bungie.clientId),environment.bungie.clientSecret)
       });
       
       window.location.href = authUrl;
@@ -82,7 +108,10 @@ export class AuthService {
   }
 
   public handleCallback(code: string): Observable<boolean> {
-    this.loggingService.info('AuthService', 'Processing callback with authorization code');
+    this.loggingService.info('AuthService', 'Processing callback with authorization code', {
+      inCallbackRoute: true,
+      route: this.isBrowser() ? window.location.pathname + window.location.search : 'unknown'
+    });
     
     const redirectUrl = this.getRedirectUrl();
     
@@ -267,7 +296,8 @@ export class AuthService {
   private autoLogout(expirationDuration: number): void {
     this.loggingService.debug('AuthService', 'Setting auto-logout timer', {
       expiresInMs: expirationDuration,
-      expiresAt: new Date(Date.now() + expirationDuration).toISOString()
+      expiresAt: new Date(Date.now() + expirationDuration).toISOString(),
+      currentRoute: this.isBrowser() ? window.location.pathname : 'unknown'
     });
     
     this.tokenExpirationTimer = setTimeout(() => {
@@ -278,12 +308,23 @@ export class AuthService {
 
   private checkStoredToken(): void {
     if (this.isBrowser()) {
+      // Skip token validation if we're in the callback route
+      if (this.isCallbackRoute()) {
+        this.loggingService.debug('AuthService', 'In callback route, skipping token validation');
+        return;
+      }
+      
       const token = localStorage.getItem('authToken');
       const membershipId = localStorage.getItem('membershipId');
       const expiryTimeString = localStorage.getItem('tokenExpiry');
       
       if (!token || !membershipId || !expiryTimeString) {
-        this.loggingService.debug('AuthService', 'Missing token data, cleaning up');
+        this.loggingService.debug('AuthService', 'Missing token data, cleaning up', {
+          currentRoute: window.location.pathname + window.location.search,
+          hasToken: !!token,
+          hasMembershipId: !!membershipId,
+          hasExpiryTime: !!expiryTimeString
+        });
         this.logout();
         return;
       }
@@ -300,7 +341,8 @@ export class AuthService {
         
         this.loggingService.info('AuthService', 'Found valid token', {
           hasMembershipId: !!membershipId,
-          expiresAt: new Date(expiryTime).toISOString()
+          expiresAt: new Date(expiryTime).toISOString(),
+          currentRoute: window.location.pathname
         });
         
         // Set up auto-logout for the remaining time

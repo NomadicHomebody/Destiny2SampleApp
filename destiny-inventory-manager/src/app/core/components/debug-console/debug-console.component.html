@@ -48,6 +48,11 @@
         [isOnline]="isOnline"
         (filterChange)="applyFilters()"
         (levelToggle)="toggleLevel($event)">
+        <div class="logs-actions">
+          <button (click)="clearLogs()" class="action-button clear-logs-btn">
+            Clear All Logs
+          </button>
+        </div>
       </app-logs-tab>
       
       <!-- FILES TAB -->

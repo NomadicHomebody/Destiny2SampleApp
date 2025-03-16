@@ -11,6 +11,8 @@ import { LogEntryDetailComponent } from '../log-entry-detail/log-entry-detail.co
   standalone: true,
   imports: [CommonModule, FormsModule, LogEntryDetailComponent],
   template: `
+    <ng-content></ng-content>
+    
     <div class="debug-filters">
       <div class="level-filters">
         <label *ngFor="let level of objectKeys(logLevels)">
