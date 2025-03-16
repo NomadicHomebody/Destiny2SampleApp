@@ -132,7 +132,9 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
         
         // Show by default in dev mode or if there are errors
         this.visible = !environment.production && 
-        (this.logs.some(log => log.level === LogLevel.ERROR) || 
+        (this.logs.some(log => log.level === LogLevel.DEBUG) ||
+        this.logs.some(log => log.level === LogLevel.INFO) ||
+        this.logs.some(log => log.level === LogLevel.ERROR) || 
         this.logs.some(log => log.level === LogLevel.FATAL));
         
         this.applyFilters();
