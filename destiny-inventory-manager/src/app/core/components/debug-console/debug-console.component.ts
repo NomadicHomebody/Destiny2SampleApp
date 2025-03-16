@@ -155,17 +155,8 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
 
   ngAfterViewInit(): void {
     if (isPlatformBrowser(this.platformId)) {
-      // Set up resize handle interactions
-      const topLeftHandle = this.elementRef.nativeElement.querySelector('.resize-handle-top-left');
-      const bottomLeftHandle = this.elementRef.nativeElement.querySelector('.resize-handle-bottom-left');
-      
-      if (topLeftHandle) {
-        this.setupResizeHandlers(topLeftHandle, 'topleft');
-      }
-      
-      if (bottomLeftHandle) {
-        this.setupResizeHandlers(bottomLeftHandle, 'bottomleft');
-      }
+      // Set up resize handles
+      this.setupResizeHandles();
     }
   }
 
@@ -247,28 +238,68 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  private setupResizeHandlers(handle: HTMLElement, type: 'topleft' | 'bottomleft'): void {
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+  /**
+   * Setup resize handles for the debug console
+   * This method is called in ngAfterViewInit and when the console becomes visible
+   */
+  private setupResizeHandles(): void {
+    // Small delay to ensure DOM elements are fully rendered
+    setTimeout(() => {
+      const topLeftHandle = this.elementRef.nativeElement.querySelector('.resize-handle-top-left');
+      const bottomLeftHandle = this.elementRef.nativeElement.querySelector('.resize-handle-bottom-left');
+      
+      if (topLeftHandle) {
+        this.setupResizeHandler(topLeftHandle, 'topleft');
+      } else {
+        console.warn('Top-left resize handle not found in DOM');
+      }
+      
+      if (bottomLeftHandle) {
+        this.setupResizeHandler(bottomLeftHandle, 'bottomleft');
+      } else {
+        console.warn('Bottom-left resize handle not found in DOM');
+      }
+    }, 100);
+  }
+
+  /**
+   * Setup an individual resize handler
+   */
+  private setupResizeHandler(handle: HTMLElement, type: 'topleft' | 'bottomleft'): void {
+    // Remove any existing listeners to avoid duplicates
+    const newHandle = handle.cloneNode(true);
+    handle.parentNode?.replaceChild(newHandle, handle);
+    
+    // Use the standard Event interface and avoid explicit MouseEvent typing
+    newHandle.addEventListener('mousedown', (e) => {
+      // Cast e to MouseEvent safely
+      const mouseEvent = e as MouseEvent;
+      mouseEvent.preventDefault();
+      mouseEvent.stopPropagation();
       
       // Get the console element
       const consoleElement = this.elementRef.nativeElement.querySelector('.debug-console');
-      if (!consoleElement) return;
+      if (!consoleElement) {
+        console.warn('Debug console element not found');
+        return;
+      }
       
       // Store initial state
-      const startX = e.clientX;
-      const startY = e.clientY;
+      const startX = mouseEvent.clientX;
+      const startY = mouseEvent.clientY;
       const startWidth = consoleElement.offsetWidth;
       const startHeight = consoleElement.offsetHeight;
       
       // Function to handle mouse movement
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        moveEvent.preventDefault(); // Prevent text selection during resize
+      const handleMouseMove = (moveEvent: Event) => {
+        const mouseMoveEvent = moveEvent as MouseEvent;
+        mouseMoveEvent.preventDefault(); // Prevent text selection during resize
         
         // Calculate how much the mouse has moved
-        const deltaX = startX - moveEvent.clientX;
-        const deltaY = type === 'topleft' ? startY - moveEvent.clientY : moveEvent.clientY - startY;
+        const deltaX = startX - mouseMoveEvent.clientX;
+        const deltaY = type === 'topleft' ? 
+                     startY - mouseMoveEvent.clientY : 
+                     mouseMoveEvent.clientY - startY;
         
         // Update width based on horizontal movement
         let newWidth = startWidth + deltaX;
@@ -280,7 +311,12 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
         this.renderer.setStyle(consoleElement, 'width', `${newWidth}px`);
         
         // Update height based on vertical movement
-        let newHeight = startHeight + deltaY;
+        let newHeight;
+        if (type === 'topleft') {
+          newHeight = startHeight + (startY - mouseMoveEvent.clientY);
+        } else { // bottomleft
+          newHeight = startHeight + (mouseMoveEvent.clientY - startY);
+        }
         
         // Enforce minimum height and maximum height
         newHeight = Math.max(300, Math.min(newHeight, window.innerHeight * 0.95));
@@ -301,8 +337,17 @@ export class DebugConsoleComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
+  /**
+   * Toggle the visibility of the debug console and setup resize handles when becoming visible
+   */
   toggleVisible(): void {
     this.visible = !this.visible;
+    
+    // When becoming visible, ensure resize handlers are set up
+    if (this.visible && isPlatformBrowser(this.platformId)) {
+      // Use setTimeout to allow the DOM to update before attaching handlers
+      setTimeout(() => this.setupResizeHandles(), 50);
+    }
   }
   
   toggleLevel(level: LogLevel): void {

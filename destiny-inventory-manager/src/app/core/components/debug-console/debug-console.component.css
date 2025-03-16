@@ -26,6 +26,11 @@
   max-width: 95vw;
 }
 
+/* Add hidden class for visibility toggle */
+.debug-console.hidden {
+  display: none;
+}
+
 .debug-console::before {
   content: '';
   position: absolute;

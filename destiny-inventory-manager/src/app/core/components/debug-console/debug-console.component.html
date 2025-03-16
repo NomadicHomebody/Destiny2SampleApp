@@ -1,4 +1,4 @@
-<div class="debug-console" *ngIf="visible" [ngClass]="{'maximized': isMaximized}">
+<div class="debug-console" [class.hidden]="!visible" [ngClass]="{'maximized': isMaximized}">
   <div class="resize-handle-top-left" title="Resize console"></div>
   <div class="resize-handle-bottom-left" title="Resize console"></div>
   
