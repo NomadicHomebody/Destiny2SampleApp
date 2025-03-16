@@ -189,54 +189,45 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
     const redirectUrl = environment.bungie.redirectConfig?.useCurrentHost ?
       this.getRedirectUrl() : environment.bungie.redirectUrl;
       
-    const tokenRequest = {
-      grant_type: 'authorization_code',
-      code: code,
-      client_id: environment.bungie.clientId,
-      client_secret: environment.bungie.clientSecret,
-      redirect_uri: redirectUrl
-    };
+    // Create URLSearchParams object for proper x-www-form-urlencoded formatting
+    const body = new URLSearchParams();
+    body.set('grant_type', 'authorization_code');
+    body.set('code', code);
+    body.set('client_id', environment.bungie.clientId);
+    
+    if (environment.bungie.clientSecret) {
+      body.set('client_secret', environment.bungie.clientSecret);
+    }
+    
+    body.set('redirect_uri', redirectUrl);
   
-    // Make the token request
+    this.loggingService.debug('CallbackComponent', 'Making token request', {
+      url: environment.bungie.tokenUrl,
+      redirect_uri: redirectUrl,
+    });
+  
+    // Include both X-API-Key and Origin headers
     this.http.post<any>(
-      environment.bungie.tokenUrl, 
-      tokenRequest, 
-      { headers: new HttpHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }) }
-    ).pipe(
-      map(response => {
-        // Transform to URL encoded form data
-        const body = new URLSearchParams();
-        Object.keys(tokenRequest).forEach(key => {
-          body.set(key, tokenRequest[key as keyof typeof tokenRequest]);
-        });
-        
-        return this.http.post<any>(
-          environment.bungie.tokenUrl,
-          body.toString(),
-          { headers: new HttpHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }) }
-        );
-      }),
-      switchMap(tokenObservable => tokenObservable),
-      catchError(error => {
-        this.loggingService.error(
-          'CallbackComponent',
-          'Failed to exchange authorization code for token',
-          error,
-          'AUTH_TOKEN_EXCHANGE_FAILED',
-          { code: 'REDACTED' }
-        );
-        this.error = 'Authentication failed: Unable to retrieve token';
-        this.processing = false;
-        return throwError(() => error);
-      })
+      environment.bungie.tokenUrl,
+      body.toString(),
+      { 
+        headers: new HttpHeaders({ 
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-API-Key': environment.bungie.apiKey,
+          // Include the Origin header matching what's in your Bungie Developer Portal
+          'Origin': this.getOrigin()
+        }) 
+      }
     ).subscribe({
       next: (tokenResponse) => {
         this.loggingService.info('CallbackComponent', 'Successfully retrieved token');
         
-        // Store token in localStorage
-        localStorage.setItem('authToken', tokenResponse.access_token);
-        localStorage.setItem('refreshToken', tokenResponse.refresh_token);
-        localStorage.setItem('tokenExpiry', (Date.now() + (tokenResponse.expires_in * 1000)).toString());
+        // Check if in browser environment before using localStorage
+        if (isPlatformBrowser(this.platformId)) {
+          localStorage.setItem('authToken', tokenResponse.access_token);
+          localStorage.setItem('refreshToken', tokenResponse.refresh_token);
+          localStorage.setItem('tokenExpiry', (Date.now() + (tokenResponse.expires_in * 1000)).toString());
+        }
         
         // Get user memberships to store primary membership info
         this.getUserMemberships(tokenResponse.access_token);
@@ -244,14 +235,40 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
       error: (err) => {
         this.error = 'Authentication failed: Unable to retrieve token';
         this.processing = false;
+        
+        let errorDetails = {};
+        if (err.error && err.error.error_description) {
+          errorDetails = {
+            error: err.error.error,
+            description: err.error.error_description
+          };
+        }
+        
         this.loggingService.error(
           'CallbackComponent',
           'Token request failed',
           err,
-          'AUTH_TOKEN_REQUEST_FAILED'
+          'AUTH_TOKEN_REQUEST_FAILED',
+          errorDetails
         );
       }
     });
+  }
+  
+  // Add this method to get the correct origin
+  private getOrigin(): string {
+    if (isPlatformBrowser(this.platformId)) {
+      return window.location.origin;
+    }
+    
+    // Fallback to the configured redirect URL's origin
+    const config = environment.bungie.redirectConfig;
+    if (config) {
+      return `${config.protocol}://${config.host}${config.port ? `:${config.port}` : ''}`;
+    }
+    
+    // Last resort fallback
+    return 'https://localhost:4433';
   }
   
   private getUserMemberships(token: string): void {
@@ -268,11 +285,14 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
         try {
           const data = response.Response;
           
-          // Store membership info for later use
+          // Store membership info for later use (with platform check)
           if (data.destinyMemberships && data.destinyMemberships.length > 0) {
             const primaryMembership = data.destinyMemberships[0];
-            localStorage.setItem('membershipId', primaryMembership.membershipId);
-            localStorage.setItem('membershipType', primaryMembership.membershipType.toString());
+            
+            if (isPlatformBrowser(this.platformId)) {
+              localStorage.setItem('membershipId', primaryMembership.membershipId);
+              localStorage.setItem('membershipType', primaryMembership.membershipType.toString());
+            }
             
             // Get characters for this membership
             this.getCharacters(token, primaryMembership.membershipType, primaryMembership.membershipId);
@@ -321,8 +341,11 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
           if (data.characters && data.characters.data) {
             const characterIds = Object.keys(data.characters.data);
             if (characterIds.length > 0) {
-              // Store the first character ID
-              localStorage.setItem('characterId', characterIds[0]);
+              // Store the first character ID (with platform check)
+              if (isPlatformBrowser(this.platformId)) {
+                localStorage.setItem('characterId', characterIds[0]);
+              }
+              
               this.loggingService.info(
                 'CallbackComponent',
                 'Successfully retrieved character information',
