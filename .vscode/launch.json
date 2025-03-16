@@ -21,24 +21,25 @@
       "request": "launch",
       "name": "Debug Angular Application",
       "url": "https://localhost:4433",
-      "webRoot": "${workspaceFolder}",
+      "webRoot": "${workspaceFolder}/destiny-inventory-manager/",
       "sourceMaps": true,
       "sourceMapPathOverrides": {
-        "webpack:///./src/*": "${workspaceFolder}/src/*",
-        "webpack:///src/*": "${workspaceFolder}/src/*",
-        "webpack:///./*": "${workspaceFolder}/*",
+        "webpack:///./src/*": "${workspaceFolder}/destiny-inventory-manager/src/*",
+        "webpack:///src/*": "${workspaceFolder}/destiny-inventory-manager/src/*",
+        "webpack:///./*": "${workspaceFolder}/destiny-inventory-manager/*",
         "webpack:///*": "*",
-        "./*": "${workspaceFolder}/*"
+        "./*": "${workspaceFolder}/destiny-inventory-manager/*"
       },
       "trace": true,
       "userDataDir": "${workspaceFolder}/.vscode/chrome-debug-profile",
       "runtimeArgs": [
-        "--disable-web-security"
+        "--disable-web-security",
+        "--allow-insecure-localhost"  // Added to handle HTTPS on localhost
       ],
       "preLaunchTask": "prepare-and-serve",
       "smartStep": true,
       "resolveSourceMapLocations": [
-        "${workspaceFolder}/**",
+        "${workspaceFolder}/destiny-inventory-manager/**",
         "!**/node_modules/**"
       ]
     }
