@@ -23,7 +23,11 @@
         <button (click)="toggleVisible()" class="action-btn close-btn" title="Close">
           <span class="icon">✖️</span>
         </button>
+        <button (click)="toggleMaximize()" class="action-btn maximize-btn" [title]="isMaximized ? 'Restore' : 'Maximize'">
+          <span class="icon">{{ isMaximized ? '🗗' : '🗖' }}</span>
+        </button>
       </div>
+      <div class="debug-console" *ngIf="visible" [ngClass]="{'maximized': isMaximized}"></div>
     </div>
     
     <div class="tabs">
@@ -87,3 +91,5 @@
     <span class="log-count" *ngIf="errorCount">{{ errorCount }}</span>
     <span class="offline-indicator" *ngIf="!isOnline">🔴</span>
   </div>
+
+  <div class="resize-handle" title="Resize console"></div>

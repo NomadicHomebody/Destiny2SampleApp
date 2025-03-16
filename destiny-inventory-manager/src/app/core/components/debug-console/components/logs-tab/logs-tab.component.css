@@ -68,7 +68,8 @@
   
   .debug-content {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: auto; /* This is already present, but ensure max-height is properly set */
+    max-height: 100%; /* Make sure it doesn't grow beyond parent */
     padding: 0.5rem;
   }
   
@@ -119,11 +120,13 @@
     white-space: nowrap;
   }
   
+  /* Update the log-entry class to better handle json display */
   .log-message {
     flex: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: calc(100% - 300px); /* Give some space for other columns */
   }
   
   .expand-icon {

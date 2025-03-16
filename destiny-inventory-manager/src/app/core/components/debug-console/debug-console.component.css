@@ -1,22 +1,30 @@
 /* src/app/core/components/debug-console/debug-console.component.css */
 /* Main container styles */
 .debug-console {
-    position: fixed;
-    bottom: 0;
-    right: 0;
-    width: 90%;
-    max-width: 900px;
-    height: 70%;
-    background-color: rgba(20, 20, 20, 0.97);
-    color: #f5f5f5;
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    border-top-left-radius: 6px;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5);
-    font-family: monospace;
-    transition: all 0.3s ease;
-  }
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 90%;
+  max-width: 900px;
+  height: 70%;
+  background-color: rgba(20, 20, 20, 0.97);
+  color: #f5f5f5;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  border-top-left-radius: 6px;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5);
+  font-family: monospace;
+  transition: all 0.3s ease;
+  
+  /* Add resize properties */
+  resize: both;
+  overflow: hidden; /* Important: Keep this as hidden to only show scrollbars where we want them */
+  min-width: 400px;
+  min-height: 300px;
+  max-height: 95vh;
+  max-width: 95vw;
+}
   
   /* Header styles */
   .debug-header {
@@ -139,12 +147,12 @@
     background-color: #e67e22;
   }
   
-  /* Tab content */
   .tab-content {
     flex: 1;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    min-height: 200px; /* Ensure a minimum height */
   }
   
   /* Footer */
@@ -214,3 +222,30 @@
   .offline-indicator {
     font-size: 0.7rem;
   }
+
+  .resize-handle {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    bottom: 0;
+    right: 0;
+    cursor: nwse-resize;
+    background-color: #333;
+    border-top-left-radius: 3px;
+  }
+
+  .debug-console.maximized {
+    width: 95vw !important;
+    height: 95vh !important;
+    max-width: 95vw !important;
+    max-height: 95vh !important;
+  }
+  
+  /* Add maximize button */
+  .maximize-btn {
+    background-color: #333;
+  }
+  
+  .maximize-btn:hover {
+    background-color: #444;
+  }  

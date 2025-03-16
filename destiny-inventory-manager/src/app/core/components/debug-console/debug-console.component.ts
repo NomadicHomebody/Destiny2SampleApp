@@ -29,6 +29,8 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
   logLevels = LogLevel;
   objectKeys = Object.keys;
   
+  isMaximized = false;
+  
   // Logs storage
   logs: EnhancedLogEntry[] = [];
   filteredLogs: EnhancedLogEntry[] = [];
@@ -199,6 +201,10 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
     this.offlineLogsCount = 0; // Reset count after sync
     
     this.loggingService.info('DebugConsole', 'Offline logs synchronized');
+  }
+
+  toggleMaximize(): void {
+    this.isMaximized = !this.isMaximized;
   }
   
   updateClock(): void {

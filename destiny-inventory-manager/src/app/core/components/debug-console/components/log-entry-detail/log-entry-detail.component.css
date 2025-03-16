@@ -1,64 +1,104 @@
 /* src/app/core/components/debug-console/components/log-entry-detail/log-entry-detail.component.css */
 .log-details {
-    padding: 0;
-    background-color: #222;
-    border-top: 1px solid #333;
-    font-size: 0.8rem;
-  }
-  
-  .details-tabs {
-    display: flex;
-    background-color: #1a1a1a;
-    border-bottom: 1px solid #333;
-  }
-  
-  .details-tabs button {
-    padding: 0.3rem 0.6rem;
-    background-color: transparent;
-    border: none;
-    color: #aaa;
-    font-size: 0.7rem;
-    cursor: pointer;
-  }
-  
-  .details-tabs button.active {
-    color: #e67e22;
-    background-color: #252525;
-  }
-  
-  .details-tabs button:hover {
-    color: #fff;
-  }
-  
-  .formatted-view, .context-view, .error-view {
-    padding: 0.5rem;
-  }
-  
-  .detail-item {
-    margin-bottom: 0.5rem;
-  }
-  
-  .detail-label {
-    color: #aaa;
-    font-size: 0.75rem;
-    margin-bottom: 0.2rem;
-  }
-  
-  .detail-value {
-    color: #fff;
-  }
-  
-  pre {
-    margin: 0;
-    padding: 0.5rem;
-    white-space: pre-wrap;
-    overflow-x: auto;
-    font-size: 0.75rem;
-    background-color: #1a1a1a;
-    border-radius: 3px;
-  }
-  
-  .stack-trace {
-    white-space: pre-wrap;
-    color: #e74c3c;
-  }
+  padding: 0;
+  background-color: #222;
+  border-top: 1px solid #333;
+  font-size: 0.8rem;
+  /* Set a maximum height for the entire detail panel */
+  max-height: 400px;
+  overflow: hidden;
+}
+
+.details-tabs {
+  display: flex;
+  background-color: #1a1a1a;
+  border-bottom: 1px solid #333;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.details-tabs button {
+  padding: 0.5rem 0.75rem;
+  background-color: transparent;
+  border: none;
+  color: #aaa;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.details-tabs button.active {
+  color: #e67e22;
+  background-color: #252525;
+}
+
+.details-tabs button:hover {
+  color: #fff;
+}
+
+.formatted-view, .context-view, .error-view {
+  padding: 0.75rem;
+  max-height: 350px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.detail-item {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.detail-item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.detail-label {
+  color: #aaa;
+  font-size: 0.75rem;
+  margin-bottom: 0.3rem;
+  font-weight: 500;
+}
+
+.detail-value {
+  color: #fff;
+  word-break: break-word;
+}
+
+pre {
+  margin: 0;
+  padding: 0;
+  white-space: pre-wrap;
+  font-size: 0.75rem;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.stack-trace {
+  color: #e74c3c;
+}
+
+/* New class for JSON content */
+.json-content {
+  max-height: 200px;
+  overflow-y: auto;
+  overflow-x: auto;
+  font-family: 'Consolas', 'Monaco', monospace;
+  background-color: #1a1a1a;
+  padding: 0.5rem;
+  border-radius: 3px;
+  margin-top: 0.3rem;
+  scrollbar-width: thin;
+  scrollbar-color: #444 #1a1a1a;
+}
+
+/* Custom scrollbar styling */
+.json-content::-webkit-scrollbar,
+.formatted-view::-webkit-scrollbar,
+.context-view::-webkit-scrollbar,
+.error-view::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}

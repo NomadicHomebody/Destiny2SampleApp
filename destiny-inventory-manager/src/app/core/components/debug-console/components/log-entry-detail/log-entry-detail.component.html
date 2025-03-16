@@ -1,0 +1,87 @@
+<div class="log-details" *ngIf="log.expanded">
+    <div class="details-tabs">
+      <button [class.active]="log.activeTab === 'formatted'" 
+              (click)="log.activeTab = 'formatted'">Formatted</button>
+      <button [class.active]="log.activeTab === 'raw'" 
+              (click)="log.activeTab = 'raw'">Raw JSON</button>
+      <button [class.active]="log.activeTab === 'context'" 
+              (click)="log.activeTab = 'context'">Context</button>
+      <button *ngIf="log.technical" [class.active]="log.activeTab === 'error'" 
+              (click)="log.activeTab = 'error'">Error</button>
+    </div>
+    
+    <div [ngSwitch]="log.activeTab">
+      <div *ngSwitchCase="'formatted'" class="formatted-view">
+        <div class="detail-item">
+          <div class="detail-label">Message:</div>
+          <div class="detail-value">{{ log.message }}</div>
+        </div>
+        <div class="detail-item" *ngIf="log.code">
+          <div class="detail-label">Code:</div>
+          <div class="detail-value">{{ log.code }}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Source:</div>
+          <div class="detail-value">{{ log.source }}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Time:</div>
+          <div class="detail-value">{{ formatFullTime(log.timestamp) }}</div>
+        </div>
+        <div class="detail-item" *ngIf="log.context?.url">
+          <div class="detail-label">URL:</div>
+          <div class="detail-value">{{ log.context?.url }}</div>
+        </div>
+        <div class="detail-item" *ngIf="log.context?.user">
+          <div class="detail-label">User:</div>
+          <div class="json-content">
+            <pre>{{ formatObject(log.context?.user) }}</pre>
+          </div>
+        </div>
+      </div>
+      
+      <div *ngSwitchCase="'raw'" class="json-content">
+        <pre>{{ formatLogEntry(log) }}</pre>
+      </div>
+      
+      <div *ngSwitchCase="'context'" class="context-view">
+        <div class="detail-item" *ngIf="log.context?.additionalData">
+          <div class="detail-label">Additional Data:</div>
+          <div class="json-content">
+            <pre>{{ formatObject(log.context?.additionalData) }}</pre>
+          </div>
+        </div>
+        <div class="detail-item" *ngIf="log.metadata">
+          <div class="detail-label">Metadata:</div>
+          <div class="json-content">
+            <pre>{{ formatObject(log.metadata) }}</pre>
+          </div>
+        </div>
+        <div class="detail-item" *ngIf="log.filters">
+          <div class="detail-label">Filters:</div>
+          <div class="json-content">
+            <pre>{{ formatObject(log.filters) }}</pre>
+          </div>
+        </div>
+      </div>
+      
+      <div *ngSwitchCase="'error'" class="error-view">
+        <div class="detail-item">
+          <div class="detail-label">Error Name:</div>
+          <div class="detail-value">{{ log.technical?.name }}</div>
+        </div>
+        <div class="detail-item" *ngIf="log.technical?.stack">
+          <div class="detail-label">Stack Trace:</div>
+          <div class="json-content">
+            <pre class="stack-trace">{{ log.technical?.stack }}</pre>
+          </div>
+        </div>
+        <div class="detail-item" *ngIf="log.technical?.rawError">
+          <div class="detail-label">Error Details:</div>
+          <div class="json-content">
+            <pre>{{ formatObject(log.technical?.rawError) }}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
