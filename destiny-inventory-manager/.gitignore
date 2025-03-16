@@ -45,3 +45,4 @@ Thumbs.db
 destiny-inventory-manager\src\environments\environment.ts
 .angular\
 certs\
+.vscode\
