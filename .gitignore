@@ -1,8 +1,4 @@
 .angular/*
 destiny-inventory-manager/certs/
-.vscode/*
-!./.vscode/settings.json
-!/.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.env.template
+.vscode/.env
+.vscode/chrome-debug-profile
