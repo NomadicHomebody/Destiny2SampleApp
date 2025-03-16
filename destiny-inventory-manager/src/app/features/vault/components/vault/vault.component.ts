@@ -6,6 +6,7 @@ import { VaultService } from '../../services/vault.service';
 import { DestinyItem, ItemLocation, VaultFilter } from '../../models/vault.models';
 import { CommonModule } from '@angular/common';
 import { ItemFilterComponent } from '../item-filter/item-filter.component';
+import { LoggingService } from '../../../../core/services/logging.service';
 
 @Component({
   selector: 'app-vault',
@@ -26,11 +27,17 @@ export class VaultComponent implements OnInit, OnDestroy {
   constructor(
     private vaultService: VaultService,
     private router: Router,
+    private loggingService: LoggingService,
     @Inject(PLATFORM_ID) private platformId: Object
   ) {}
 
   ngOnInit(): void {
+    this.loggingService.debug('VaultComponent', 'Initializing vault component', {
+      isAuthenticated: this.isAuthenticated()
+    });
+    
     if (!this.isAuthenticated()) {
+      this.loggingService.warn('VaultComponent', 'User not authenticated, redirecting to login');
       this.router.navigate(['/auth/login']);
       return;
     }
@@ -43,12 +50,25 @@ export class VaultComponent implements OnInit, OnDestroy {
   }
 
   private isAuthenticated(): boolean {
-    return isPlatformBrowser(this.platformId) && localStorage.getItem('authToken') !== null;
+    const isAuth = isPlatformBrowser(this.platformId) && 
+           localStorage.getItem('authToken') !== null && 
+           this.getMembershipId() !== null;
+           
+    return isAuth;
+  }
+  
+  private getMembershipId(): string | null {
+    if (isPlatformBrowser(this.platformId)) {
+      return localStorage.getItem('membershipId');
+    }
+    return null;
   }
 
   private loadItems(): void {
     this.isLoading = true;
     this.error = null;
+    
+    this.loggingService.info('VaultComponent', 'Loading vault items');
 
     this.subscription.add(
       this.vaultService.vaultItems$.subscribe({
@@ -56,11 +76,14 @@ export class VaultComponent implements OnInit, OnDestroy {
           this.vaultItems = items;
           this.filteredItems = items;
           this.isLoading = false;
+          this.loggingService.debug('VaultComponent', 'Vault items loaded successfully', {
+            itemCount: items.length
+          });
         },
         error: (err) => {
           this.error = 'Failed to load vault items. Please try again.';
           this.isLoading = false;
-          console.error('Error loading vault items:', err);
+          this.loggingService.error('VaultComponent', 'Error loading vault items', err);
         }
       })
     );
@@ -156,7 +179,7 @@ export class VaultComponent implements OnInit, OnDestroy {
         error: (err) => {
           this.error = 'Failed to transfer item to vault. Please try again.';
           this.isLoading = false;
-          console.error('Error transferring item to vault:', err);
+          this.loggingService.error('VaultComponent', 'Error transferring item to vault', err);
         }
       })
     );
@@ -189,7 +212,7 @@ export class VaultComponent implements OnInit, OnDestroy {
         error: (err) => {
           this.error = 'Failed to transfer item to character. Please try again.';
           this.isLoading = false;
-          console.error('Error transferring item to character:', err);
+          this.loggingService.error('VaultComponent', 'Error transferring item to character', err);
         }
       })
     );
@@ -232,7 +255,7 @@ export class VaultComponent implements OnInit, OnDestroy {
         error: (err) => {
           this.error = 'Failed to equip item. Please try again.';
           this.isLoading = false;
-          console.error('Error equipping item:', err);
+          this.loggingService.error('VaultComponent', 'Error equipping item', err);
         }
       })
     );

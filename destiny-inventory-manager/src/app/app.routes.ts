@@ -3,12 +3,6 @@ import { AuthGuard } from './features/auth/guards/auth.guard';
 import { ItemDetailComponent } from './features/vault/components/item-detail/item-detail.component';
 
 export const routes: Routes = [
-  // Public routes
-  {
-    path: 'auth',
-    loadChildren: () => import('./features/auth/auth.routes').then(m => m.AUTH_ROUTES)
-  },
-  
   // Protected routes with AuthGuard
   {
     path: 'vault',
@@ -16,6 +10,20 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
   
-  // Default route
-  { path: '', redirectTo: '/auth/login', pathMatch: 'full' },
+  // Public routes
+  {
+    path: 'auth',
+    loadChildren: () => import('./features/auth/auth.routes').then(m => m.AUTH_ROUTES)
+  },
+  
+  // Default route - check if authenticated, if yes go to vault, otherwise login
+  { 
+    path: '', 
+    redirectTo: (() => {
+      // This will be evaluated at runtime
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
+      return token ? '/vault' : '/auth/login';
+    })(), 
+    pathMatch: 'full' 
+  },
 ];
