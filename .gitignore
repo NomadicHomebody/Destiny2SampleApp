@@ -1,4 +1,8 @@
-destiny-inventory-manager/src/environments/environment.ts
 .angular/*
 destiny-inventory-manager/certs/
 .vscode/*
+!./.vscode/settings.json
+!/.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.env.template

@@ -1,0 +1,106 @@
+{
+  // For more information, visit: https://go.microsoft.com/fwlink/?LinkId=733558
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "start",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "pattern": "$tsc",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": {
+            "regexp": "(.*?)"
+          },
+          "endsPattern": {
+            "regexp": "bundle generation complete"
+          }
+        }
+      }
+    },
+    {
+      "type": "npm",
+      "script": "test",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "pattern": "$tsc",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": {
+            "regexp": "(.*?)"
+          },
+          "endsPattern": {
+            "regexp": "bundle generation complete"
+          }
+        }
+      }
+    },
+    {
+      "label": "set-workspace-path",
+      "type": "shell",
+      "command": "echo",
+      "args": ["Setting workspace path for debugging..."],
+      "windows": {
+        "options": {
+          "env": {
+            "WORKSPACE_PATH": "${workspaceFolder}"
+          }
+        }
+      },
+      "linux": {
+        "options": {
+          "env": {
+            "WORKSPACE_PATH": "${workspaceFolder}"
+          }
+        }
+      },
+      "osx": {
+        "options": {
+          "env": {
+            "WORKSPACE_PATH": "${workspaceFolder}"
+          }
+        }
+      },
+      "presentation": {
+        "reveal": "never",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "serve",
+      "type": "npm",
+      "script": "debug",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "pattern": "$tsc",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "...",
+          "endsPattern": "..."
+        }
+      }
+    },
+    {
+      "label": "prepare-and-serve",
+      "dependsOn": ["set-workspace-path", "serve"],
+      "dependsOrder": "sequence", // Run tasks in sequence
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": true,
+        "echo": true
+      }
+    }
+  ]
+}

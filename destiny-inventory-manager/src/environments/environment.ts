@@ -1,12 +1,12 @@
 export const environment = {
     production: false,
     bungie: {
-        apiKey: '0d57094af7184c1f99c75e1a885981b2', // Replace with your actual API key
+        apiKey: ${BUNGIE_API_KEY}, // Replace with your actual API key
         apiRoot: 'https://www.bungie.net/Platform',
         authUrl: 'https://www.bungie.net/en/OAuth/Authorize',
         tokenUrl: 'https://www.bungie.net/Platform/App/OAuth/token/',
-        clientId: '49264', // Replace with your actual client ID
-        clientSecret: 'Z82MrLJ5ErUPiaw4zDFGmD8StjZPKAFv.IYYN69TglA', // Replace with your actual client secret
+        clientId: ${BUNGIE_CLIENT_ID}, // Replace with your actual client ID
+        clientSecret: ${BUNGIE_CLIENT_SECRET}, // Replace with your actual client secret
         // Updated to use HTTPS and a custom port
         redirectUrl: 'https://localhost:4433/auth/callback',
         // You can add this if you need to support dynamic host or port
@@ -25,7 +25,7 @@ export const environment = {
       // Enable specific emitters
       emitters: {
         console: true,  // Log to console
-        remote: true,   // Log to remote endpoints
+        remote: false,   // Log to remote endpoints
         file: true      // Log to local file
       },
       
@@ -90,9 +90,9 @@ export const environment = {
       // Same as above but with production values
     },
     logging: {
-      minLevel: 'INFO',
+      minLevel: 'DEBUG',
       emitters: {
-        console: false,  // Disable console in production
+        console: true,  // Disable console in production
         remote: true,    // Enable remote logging in production
         file: true       // Enable file logging in production
       },
