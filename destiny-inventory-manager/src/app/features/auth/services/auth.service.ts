@@ -62,10 +62,10 @@ export class AuthService {
         sessionStorage.setItem('auth_state', state);
       }
       
-      const authUrl = `${environment.bungie.authUrl}?client_id=${environment.bungie.clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUrl)}&state=${state}`;
+      const authUrl = `${environment.bungie.authUrl}?client_id=${encodeURIComponent(String(environment.bungie.clientId))}&response_type=code&redirect_uri=${encodeURIComponent(redirectUrl)}&state=${state}`;
       
       this.loggingService.info('AuthService', 'Redirecting to Bungie authorization', {
-        authUrl: authUrl.replace(environment.bungie.clientId, '[REDACTED]')
+        authUrl: authUrl.replace(String(environment.bungie.clientId), '[REDACTED]')
       });
       
       window.location.href = authUrl;
@@ -85,29 +85,38 @@ export class AuthService {
     this.loggingService.info('AuthService', 'Processing callback with authorization code');
     
     const redirectUrl = this.getRedirectUrl();
-    this.loggingService.debug('AuthService', 'Using redirect URL for token exchange', { redirectUrl });
+    
+    // Ensure client_id and client_secret are properly formatted as strings
+    const clientId = String(environment.bungie.clientId).trim();
+    const clientSecret = String(environment.bungie.clientSecret).trim();
+    
+    this.loggingService.debug('AuthService', 'Using redirect URL for token exchange', { 
+      redirectUrl,
+      clientIdLength: clientId.length,
+      hasClientSecret: clientSecret.length > 0
+    });
     
     const body = new URLSearchParams();
     body.set('grant_type', 'authorization_code');
     body.set('code', code);
-    body.set('client_id', environment.bungie.clientId);
-    body.set('client_secret', environment.bungie.clientSecret);
+    body.set('client_id', clientId);
+    
+    // Only include client_secret if it has a value
+    if (clientSecret) {
+      body.set('client_secret', clientSecret);
+    }
+    
     body.set('redirect_uri', redirectUrl); // Must exactly match the initial request
 
-    // Log the token request for debugging (not in production)
-    this.loggingService.debug('AuthService', 'Token request details', {
-      url: environment.bungie.tokenUrl,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-API-Key': '[REDACTED]',
-        'Origin': this.getOrigin()
-      },
-      body: {
-        grant_type: 'authorization_code',
-        client_id: '[REDACTED]',
-        has_client_secret: !!environment.bungie.clientSecret,
-        redirect_uri: redirectUrl
-      }
+    // Log the actual HTTP request body (with sensitive data redacted)
+    const bodyString = body.toString();
+    const redactedBody = bodyString
+      .replace(/client_id=([^&]+)/, 'client_id=[REDACTED]')
+      .replace(/client_secret=([^&]+)/, 'client_secret=[REDACTED]');
+      
+    this.loggingService.debug('AuthService', 'Token request body', {
+      bodyString: redactedBody,
+      contentLength: bodyString.length
     });
 
     const headers = new HttpHeaders({
@@ -118,7 +127,7 @@ export class AuthService {
 
     return this.http.post<AuthToken>(
       environment.bungie.tokenUrl,
-      body.toString(),
+      bodyString,
       { headers }
     ).pipe(
       tap(token => {
@@ -128,7 +137,7 @@ export class AuthService {
       map(() => true),
       catchError((error: HttpErrorResponse) => {
         let errorMessage = 'Failed to obtain access token';
-        let errorDetails = {};
+        let errorDetails: any = {};
         
         if (error.error) {
           errorMessage = `Token exchange failed: ${error.error.error_description || error.error.error || 'Unknown error'}`;
@@ -138,6 +147,23 @@ export class AuthService {
             status: error.status,
             statusText: error.statusText
           };
+          
+          // Special handling for client_id parsing errors
+          if (error.error.error_description === 'Cannot parse client_id') {
+            this.loggingService.error(
+              'AuthService',
+              'Client ID parsing error during token exchange',
+              error,
+              'AUTH_CLIENT_ID_ERROR',
+              {
+                clientIdType: typeof environment.bungie.clientId,
+                clientIdLength: clientId.length,
+                // Log first and last character to help diagnose formatting issues
+                clientIdStart: clientId.charAt(0),
+                clientIdEnd: clientId.charAt(clientId.length - 1)
+              }
+            );
+          }
         }
         
         this.loggingService.error(
