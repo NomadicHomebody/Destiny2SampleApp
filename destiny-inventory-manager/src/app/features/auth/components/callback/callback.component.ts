@@ -28,6 +28,7 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
   private mouse = { x: 0, y: 0 };
   private codeProcessed = false; // Flag to prevent code reuse
   private processingTimeout: any = null;
+  private callbackStartTime: number = Date.now();
 
   constructor(
     private route: ActivatedRoute,
@@ -37,7 +38,14 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
     private loggingService: LoggingService,
     private authService: AuthService,
     @Inject(PLATFORM_ID) private platformId: Object
-  ) {}
+  ) {
+    // Log callback initialization
+    this.loggingService.info('CallbackComponent', 'OAuth callback initialized', {
+      startTime: new Date().toISOString(),
+      url: this.isPlatformBrowser() ? window.location.href.replace(/code=([^&]+)/, 'code=[REDACTED]') : 'unknown',
+      performance: this.getPerformanceMetrics()
+    });
+  }
   
   // Method for checking in template
   isPlatformBrowser(): boolean {
@@ -60,6 +68,14 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
       const state = params['state'];
       const error = params['error'];
       
+      // Log receipt of query parameters
+      this.loggingService.debug('CallbackComponent', 'Received OAuth callback parameters', {
+        hasCode: !!code,
+        hasState: !!state,
+        hasError: !!error,
+        timeSinceLoad: `${Date.now() - this.callbackStartTime}ms`
+      });
+      
       if (error) {
         this.error = `Authentication failed: ${error}`;
         this.processing = false;
@@ -77,10 +93,20 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
       // Validate state parameter to prevent CSRF
       if (isPlatformBrowser(this.platformId)) {
         const storedState = sessionStorage.getItem('auth_state');
+        
+        this.loggingService.debug('CallbackComponent', 'Validating state parameter', {
+          receivedState: state,
+          hasStoredState: !!storedState,
+          stateMatch: storedState === state
+        });
+        
         if (storedState && state !== storedState) {
           this.error = 'Security validation failed. Please try logging in again.';
           this.processing = false;
-          this.loggingService.error('CallbackComponent', 'State parameter mismatch', null, 'CSRF_ATTEMPT');
+          this.loggingService.error('CallbackComponent', 'State parameter mismatch', null, 'CSRF_ATTEMPT', {
+            receivedState: state,
+            expectedState: storedState?.substring(0, 6) + '...'
+          });
           return;
         }
       }
@@ -95,11 +121,22 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
       
       this.codeProcessed = true;
       
+      // Log code length and time details
+      this.loggingService.info('CallbackComponent', 'Processing authorization code', {
+        codeLength: code.length,
+        maskedCode: code.substring(0, 4) + '...' + code.substring(code.length - 4),
+        receivedAt: new Date().toISOString(),
+        processingDelay: `${Date.now() - this.callbackStartTime}ms`,
+        performance: this.getPerformanceMetrics()
+      });
+      
       // Use the AuthService to handle the token exchange
       this.authService.handleCallback(code).subscribe({
         next: (success) => {
           if (success) {
-            this.loggingService.info('CallbackComponent', 'Authentication successful');
+            this.loggingService.info('CallbackComponent', 'Authentication successful', {
+              completionTime: `${Date.now() - this.callbackStartTime}ms`
+            });
             // Clear the timeout since we're redirecting now
             if (this.processingTimeout) {
               clearTimeout(this.processingTimeout);
@@ -120,7 +157,11 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
             'Authentication error',
             err,
             'AUTH_CALLBACK_ERROR',
-            { code: 'REDACTED' } // Don't log the actual code
+            {
+              errorTime: `${Date.now() - this.callbackStartTime}ms`,
+              userAgent: navigator.userAgent,
+              performance: this.getPerformanceMetrics()
+            }
           );
         },
         complete: () => {
@@ -136,6 +177,29 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
     if (isPlatformBrowser(this.platformId)) {
       window.addEventListener('mousemove', this.handleMouseMove);
       window.addEventListener('resize', this.handleResize);
+    }
+  }
+  
+  /**
+   * Get browser performance metrics to help diagnose timing issues
+   */
+  private getPerformanceMetrics(): any {
+    if (!isPlatformBrowser(this.platformId) || !window.performance) {
+      return { available: false };
+    }
+    
+    try {
+      const navigation = window.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+      
+      return {
+        available: true,
+        loadTime: navigation ? navigation.loadEventEnd - navigation.startTime : 'unavailable',
+        domComplete: navigation ? navigation.domComplete : 'unavailable',
+        redirectCount: navigation ? navigation.redirectCount : 'unavailable',
+        type: navigation ? navigation.type : 'unavailable'
+      };
+    } catch (e) {
+      return { available: false, error: 'Error accessing performance metrics' };
     }
   }
   

@@ -8,6 +8,9 @@ import { environment } from '../../../../environments/environment';
 import { AuthToken, BungieUser } from '../models/auth.models';
 import { LoggingService } from '../../../core/services/logging.service';
 
+// Store processed auth codes to prevent reuse
+const PROCESSED_CODES_KEY = 'processed_auth_codes';
+
 @Injectable({
   providedIn: 'root'
 })
@@ -91,7 +94,7 @@ export class AuthService {
       const authUrl = `${environment.bungie.authUrl}?client_id=${encodeURIComponent(String(environment.bungie.clientId))}&response_type=code&redirect_uri=${encodeURIComponent(redirectUrl)}&state=${state}`;
       
       this.loggingService.info('AuthService', 'Redirecting to Bungie authorization', {
-        authUrl: authUrl.replace(String(environment.bungie.clientId),environment.bungie.clientSecret)
+        authUrl: authUrl.replace(String(environment.bungie.clientId), environment.bungie.clientSecret)
       });
       
       window.location.href = authUrl;
@@ -107,11 +110,68 @@ export class AuthService {
     }
   }
 
+  /**
+   * Check if a code has already been processed to prevent reuse
+   */
+  private hasCodeBeenProcessed(code: string): boolean {
+    if (!this.isBrowser()) return false;
+    
+    try {
+      const processedCodes = JSON.parse(sessionStorage.getItem(PROCESSED_CODES_KEY) || '[]');
+      return processedCodes.includes(code);
+    } catch (e) {
+      this.loggingService.warn('AuthService', 'Error checking processed codes', e);
+      return false;
+    }
+  }
+
+  /**
+   * Mark a code as processed to prevent reuse
+   */
+  private markCodeAsProcessed(code: string): void {
+    if (!this.isBrowser()) return;
+    
+    try {
+      const processedCodes = JSON.parse(sessionStorage.getItem(PROCESSED_CODES_KEY) || '[]');
+      processedCodes.push(code);
+      
+      // Keep only the last 5 codes to prevent storage bloat
+      if (processedCodes.length > 5) {
+        processedCodes.shift();
+      }
+      
+      sessionStorage.setItem(PROCESSED_CODES_KEY, JSON.stringify(processedCodes));
+    } catch (e) {
+      this.loggingService.warn('AuthService', 'Error marking code as processed', e);
+    }
+  }
+
   public handleCallback(code: string): Observable<boolean> {
+    // Log authorization code details - mask part of it for security
+    const maskedCode = code.length > 8 ? 
+      code.substring(0, 4) + '...' + code.substring(code.length - 4) : 
+      '[REDACTED]';
+    
     this.loggingService.info('AuthService', 'Processing callback with authorization code', {
       inCallbackRoute: true,
-      route: this.isBrowser() ? window.location.pathname + window.location.search : 'unknown'
+      codeReceived: true,
+      codeLength: code.length,
+      maskedCode: maskedCode,
+      receivedAt: new Date().toISOString(),
+      currentUrl: this.isBrowser() ? window.location.href.replace(/code=([^&]+)/, 'code=[REDACTED]') : 'unknown'
     });
+    
+    // Check if this code has already been processed
+    if (this.hasCodeBeenProcessed(code)) {
+      this.loggingService.warn('AuthService', 'Authorization code has already been processed', {
+        codeLength: code.length,
+        maskedCode: maskedCode
+      });
+      return throwError(() => new Error('Authorization code has already been processed'));
+    }
+    
+    // Mark this code as processed
+    this.markCodeAsProcessed(code);
     
     const redirectUrl = this.getRedirectUrl();
     
@@ -141,11 +201,13 @@ export class AuthService {
     const bodyString = body.toString();
     const redactedBody = bodyString
       .replace(/client_id=([^&]+)/, 'client_id=[REDACTED]')
-      .replace(/client_secret=([^&]+)/, 'client_secret=[REDACTED]');
+      .replace(/client_secret=([^&]+)/, 'client_secret=[REDACTED]')
+      .replace(/code=([^&]+)/, 'code=[REDACTED]');
       
     this.loggingService.debug('AuthService', 'Token request body', {
       bodyString: redactedBody,
-      contentLength: bodyString.length
+      contentLength: bodyString.length,
+      requestTime: new Date().toISOString()
     });
 
     const headers = new HttpHeaders({
@@ -154,13 +216,30 @@ export class AuthService {
       'Origin': this.getOrigin()
     });
 
+    // Log the specific details about the token request
+    this.loggingService.debug('AuthService', 'Token request details', {
+      url: environment.bungie.tokenUrl,
+      headers: {
+        contentType: 'application/x-www-form-urlencoded',
+        apiKeyPresent: !!environment.bungie.apiKey,
+        origin: this.getOrigin()
+      },
+      grantType: 'authorization_code',
+      redirectUri: redirectUrl
+    });
+
     return this.http.post<AuthToken>(
       environment.bungie.tokenUrl,
       bodyString,
       { headers }
     ).pipe(
       tap(token => {
-        this.loggingService.info('AuthService', 'Successfully obtained access token');
+        this.loggingService.info('AuthService', 'Successfully obtained access token', {
+          tokenLength: token.access_token.length,
+          expiresIn: token.expires_in,
+          tokenType: token.token_type,
+          hasMembershipId: !!token.membership_id
+        });
         this.storeToken(token);
       }),
       map(() => true),
@@ -193,6 +272,22 @@ export class AuthService {
               }
             );
           }
+          
+          // Special handling for invalid code errors
+          if (error.error.error === 'invalid_grant' && error.error.error_description === 'AuthorizationCodeInvalid') {
+            this.loggingService.error(
+              'AuthService',
+              'Invalid authorization code during token exchange',
+              error,
+              'AUTH_INVALID_CODE_ERROR',
+              {
+                codeLength: code.length,
+                maskedCode: maskedCode,
+                tokenExchangeDelay: this.calculateTimeSincePageLoad(),
+                callbackTime: new Date().toISOString()
+              }
+            );
+          }
         }
         
         this.loggingService.error(
@@ -215,6 +310,23 @@ export class AuthService {
     );
   }
 
+  /**
+   * Calculate time since page load to help diagnose code expiry issues
+   */
+  private calculateTimeSincePageLoad(): string {
+    if (!this.isBrowser() || !window.performance) return 'unknown';
+    
+    try {
+      const navigationStart = window.performance.timing.navigationStart;
+      const now = Date.now();
+      const timeSincePageLoad = now - navigationStart;
+      
+      return `${timeSincePageLoad}ms`;
+    } catch (e) {
+      return 'calculation error';
+    }
+  }
+
   public logout(): void {
     if (this.isBrowser()) {
       localStorage.removeItem('authToken');
@@ -224,6 +336,9 @@ export class AuthService {
       localStorage.removeItem('membershipType');
       localStorage.removeItem('characterId');
       sessionStorage.removeItem('auth_state');
+      
+      // Clear the processed codes storage
+      sessionStorage.removeItem(PROCESSED_CODES_KEY);
     }
     
     this.currentUserSubject.next(null);
