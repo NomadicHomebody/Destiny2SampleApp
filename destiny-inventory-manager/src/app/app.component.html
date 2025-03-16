@@ -10,7 +10,9 @@
   <footer class="app-footer">
     <p>© 2025 Destiny Inventory Manager</p>
   </footer>
-
-  <!-- Debug Console is conditionally imported only in development -->
-  <app-debug-console *ngIf="showDebugConsole"></app-debug-console>
+ 
+  <div class="app-container">
+    <!-- Other content -->
+    <app-debug-console *ngIf="showDebugConsole"></app-debug-console>
+  </div>
 </div>

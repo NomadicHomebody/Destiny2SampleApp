@@ -27,8 +27,11 @@ export class AppComponent implements OnInit {
     // Log application startup
     this.loggingService.info('AppComponent', 'Application initialized', {
       version: environment.logging.appVersion,
-      environment: environment.production ? 'production' : 'development'
+      environment: environment.production ? 'production' : 'development',
+      loggingConfig: environment.logging.minLevel,
     });
+
+    console.log('Debug console enabled:', this.showDebugConsole); // Add this line
     
     // Set up window error handler for additional error catching
     if (typeof window !== 'undefined') {

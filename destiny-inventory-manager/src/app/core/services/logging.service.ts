@@ -192,6 +192,9 @@ this.fileConfig = typedFileConfig;
     code?: string,
     additionalData?: any
   ): void {
+    
+    console.log(`DIRECT LOG: [${level}] ${source}: ${message}`); // Add this line
+    
     // Check if we should log this level based on environment configuration
     const minLevel = this.getMinLogLevel();
     if (!this.shouldLogLevel(level, minLevel)) {

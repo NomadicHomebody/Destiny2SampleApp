@@ -3,6 +3,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { AuthService } from '../../services/auth.service';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { LoggingService } from '../../../../core/services/logging.service';
 
 @Component({
   selector: 'app-login',
@@ -23,6 +24,7 @@ export class LoginComponent implements OnInit, AfterViewInit, OnDestroy {
   constructor(
     private authService: AuthService, 
     private elementRef: ElementRef,
+    private loggingService: LoggingService,
     @Inject(PLATFORM_ID) private platformId: Object
   ) {}
   
@@ -150,8 +152,13 @@ export class LoginComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
   
-  login(): void {
+    login(): void {
     this.loading = true;
+    // Log using your logging service
+    this.loggingService.info('LoginComponent', 'Login button clicked', {
+      action: 'login_attempt'
+    });
+    
     setTimeout(() => {
       this.authService.login();
     }, 500); // Small delay for the animation to show

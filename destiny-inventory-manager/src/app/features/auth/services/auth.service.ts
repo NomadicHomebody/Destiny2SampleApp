@@ -6,6 +6,7 @@ import { catchError, map, tap } from 'rxjs/operators';
 import { Router } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { AuthToken, BungieUser } from '../models/auth.models';
+import { LoggingService } from '../../../core/services/logging.service';
 
 @Injectable({
   providedIn: 'root'
@@ -18,6 +19,7 @@ export class AuthService {
   constructor(
     private http: HttpClient, // Direct injection instead of using inject()
     private router: Router,
+    private loggingService: LoggingService,
     @Inject(PLATFORM_ID) private platformId: Object
   ) {
     if (this.isBrowser()) {
@@ -30,11 +32,37 @@ export class AuthService {
   }
 
   public login(): void {
-    if (this.isBrowser()) {
-        const redirectUrl = this.getRedirectUrl();
-        const authUrl = `${environment.bungie.authUrl}?client_id=${environment.bungie.clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUrl)}`;
-        window.location.href = authUrl;
-      }
+    this.loggingService.info('AuthService', 'Login method called');
+    
+    if (!this.isBrowser()) {
+      this.loggingService.warn('AuthService', 'Cannot redirect: not in browser environment');
+      return;
+    }
+    
+    try {
+      const redirectUrl = this.getRedirectUrl();
+      this.loggingService.debug('AuthService', 'Generated redirect URL', { 
+        redirectUrl,
+        authUrl: environment.bungie.authUrl,
+        clientId: environment.bungie.clientId
+      });
+      
+      const authUrl = `${environment.bungie.authUrl}?client_id=${environment.bungie.clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUrl)}`;
+      
+      this.loggingService.info('AuthService', 'Redirecting to Bungie authorization', {
+        authUrl: authUrl.replace(environment.bungie.clientId, '[REDACTED]') // Don't log the full client ID
+      });
+      
+      window.location.href = authUrl;
+    } catch (error) {
+      this.loggingService.error(
+        'AuthService', 
+        'Failed to redirect to Bungie authorization',
+        error,
+        'AUTH_REDIRECT_FAILED',
+        { browserInfo: navigator.userAgent }
+      );
+    }
   }
 
   public handleCallback(code: string): Observable<boolean> {

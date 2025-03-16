@@ -99,42 +99,45 @@ export class DebugConsoleComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     // Only enable in non-production and only in browser environment
     if (!environment.production && isPlatformBrowser(this.platformId)) {
-      // Load logs from localStorage
-      this.logs = this.debugConsoleService.getStoredLogs();
-      
-      // Set up real-time log updates
-      this.subscription.add(
-        this.loggingService.getLogStream().subscribe(log => {
-          this.addLogEntry(log);
-        })
-      );
-      
-      // Update clock
-      this.updateClock();
-      this.timeInterval = setInterval(() => this.updateClock(), 1000);
-      
-      // Check online status
-      this.isOnline = navigator.onLine;
-      
-      window.addEventListener('online', () => {
+        // Load logs from localStorage
+        this.logs = this.debugConsoleService.getStoredLogs();
+
+        console.log('Debug console initialized, subscribing to log stream'); // Add this line
+
+        // Set up real-time log updates
+        this.subscription.add(
+            this.loggingService.getLogStream().subscribe(log => {
+            console.log('Log received in debug console:', log); // Add this line
+            this.addLogEntry(log);
+            })
+        );
+        
+        // Update clock
+        this.updateClock();
+        this.timeInterval = setInterval(() => this.updateClock(), 1000);
+        
+        // Check online status
+        this.isOnline = navigator.onLine;
+        
+        window.addEventListener('online', () => {
         this.isOnline = true;
-      });
-      
-      window.addEventListener('offline', () => {
+        });
+        
+        window.addEventListener('offline', () => {
         this.isOnline = false;
-      });
-      
-      // Check for offline logs count
-      this.checkOfflineLogs();
-      
-      // Show by default in dev mode or if there are errors
-      this.visible = !environment.production && 
+        });
+        
+        // Check for offline logs count
+        this.checkOfflineLogs();
+        
+        // Show by default in dev mode or if there are errors
+        this.visible = !environment.production && 
         (this.logs.some(log => log.level === LogLevel.ERROR) || 
         this.logs.some(log => log.level === LogLevel.FATAL));
-      
-      this.applyFilters();
+        
+        this.applyFilters();
+        }
     }
-  }
 
   ngOnDestroy(): void {
     this.subscription.unsubscribe();
