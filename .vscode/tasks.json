@@ -72,18 +72,33 @@
     },
     {
       "label": "serve",
-      "type": "npm",
-      "script": "debug",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run-script", 
+        "debug"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false,
+        "echo": true,
+        "focus": true,
+        
+      },
+      "problemMatcher": [
+        "$tsc",
+        "$eslint-stylish"
+      ],
       "isBackground": true,
-      "problemMatcher": {
-        "owner": "typescript",
-        "pattern": "$tsc",
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": "...",
-          "endsPattern": "..."
-        }
-      }
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }, 
+      "detail": "Runs the Angular application in debug mode"
     },
     {
       "label": "prepare-and-serve",
