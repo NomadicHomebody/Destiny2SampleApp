@@ -8,6 +8,7 @@ import { RouterModule } from '@angular/router';
 import { map, catchError, switchMap } from 'rxjs/operators';
 import { throwError } from 'rxjs';
 import { LoggingService } from '../../../../core/services/logging.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-callback',
@@ -25,6 +26,7 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
   private ctx!: CanvasRenderingContext2D;
   private animationId: number = 0;
   private mouse = { x: 0, y: 0 };
+  private codeProcessed = false; // Flag to prevent code reuse
 
   constructor(
     private route: ActivatedRoute,
@@ -32,6 +34,7 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
     private http: HttpClient,
     private elementRef: ElementRef,
     private loggingService: LoggingService,
+    private authService: AuthService, // Add AuthService
     @Inject(PLATFORM_ID) private platformId: Object
   ) {}
   
@@ -58,8 +61,40 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
         return;
       }
       
-      // Exchange code for token
-      this.getAccessToken(code, state);
+      // Prevent code reuse if the page is refreshed
+      if (this.codeProcessed) {
+        this.loggingService.warn('CallbackComponent', 'Authorization code already processed, preventing reuse');
+        this.error = 'This authorization response has already been processed. Please try logging in again.';
+        this.processing = false;
+        return;
+      }
+      
+      this.codeProcessed = true;
+      
+      // Use the AuthService instead of handling the token exchange directly
+      this.authService.handleCallback(code).subscribe({
+        next: (success) => {
+          if (success) {
+            this.loggingService.info('CallbackComponent', 'Authentication successful');
+            this.router.navigate(['/vault']);
+          } else {
+            this.error = 'Authentication failed. Please try again.';
+            this.processing = false;
+          }
+        },
+        error: (err) => {
+          this.error = 'Authentication failed. Please try again.';
+          this.processing = false;
+          
+          this.loggingService.error(
+            'CallbackComponent',
+            'Authentication error',
+            err,
+            'AUTH_CALLBACK_ERROR',
+            { code: 'REDACTED' } // Don't log the actual code
+          );
+        }
+      });
     });
     
     if (isPlatformBrowser(this.platformId)) {
@@ -172,212 +207,6 @@ export class CallbackComponent implements OnInit, AfterViewInit, OnDestroy {
       // Draw particle
       particle.draw(this.ctx);
     }
-  }
-  
-  private getRedirectUrl(): string {
-    if (!isPlatformBrowser(this.platformId)) return environment.bungie.redirectUrl;
-    
-    const config = environment.bungie.redirectConfig;
-    if (!config) return environment.bungie.redirectUrl;
-    
-    const protocol = window.location.protocol.replace(':', '');
-    const host = window.location.host;
-    return `${protocol}://${host}${config.path || '/auth/callback'}`;
-  }
-
-  private getAccessToken(code: string, state: string): void {
-    const redirectUrl = environment.bungie.redirectConfig?.useCurrentHost ?
-      this.getRedirectUrl() : environment.bungie.redirectUrl;
-      
-    // Create URLSearchParams object for proper x-www-form-urlencoded formatting
-    const body = new URLSearchParams();
-    body.set('grant_type', 'authorization_code');
-    body.set('code', code);
-    body.set('client_id', environment.bungie.clientId);
-    
-    if (environment.bungie.clientSecret) {
-      body.set('client_secret', environment.bungie.clientSecret);
-    }
-    
-    body.set('redirect_uri', redirectUrl);
-  
-    this.loggingService.debug('CallbackComponent', 'Making token request', {
-      url: environment.bungie.tokenUrl,
-      redirect_uri: redirectUrl,
-    });
-  
-    // Include both X-API-Key and Origin headers
-    this.http.post<any>(
-      environment.bungie.tokenUrl,
-      body.toString(),
-      { 
-        headers: new HttpHeaders({ 
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-API-Key': environment.bungie.apiKey,
-          // Include the Origin header matching what's in your Bungie Developer Portal
-          'Origin': this.getOrigin()
-        }) 
-      }
-    ).subscribe({
-      next: (tokenResponse) => {
-        this.loggingService.info('CallbackComponent', 'Successfully retrieved token');
-        
-        // Check if in browser environment before using localStorage
-        if (isPlatformBrowser(this.platformId)) {
-          localStorage.setItem('authToken', tokenResponse.access_token);
-          localStorage.setItem('refreshToken', tokenResponse.refresh_token);
-          localStorage.setItem('tokenExpiry', (Date.now() + (tokenResponse.expires_in * 1000)).toString());
-        }
-        
-        // Get user memberships to store primary membership info
-        this.getUserMemberships(tokenResponse.access_token);
-      },
-      error: (err) => {
-        this.error = 'Authentication failed: Unable to retrieve token';
-        this.processing = false;
-        
-        let errorDetails = {};
-        if (err.error && err.error.error_description) {
-          errorDetails = {
-            error: err.error.error,
-            description: err.error.error_description
-          };
-        }
-        
-        this.loggingService.error(
-          'CallbackComponent',
-          'Token request failed',
-          err,
-          'AUTH_TOKEN_REQUEST_FAILED',
-          errorDetails
-        );
-      }
-    });
-  }
-  
-  // Add this method to get the correct origin
-  private getOrigin(): string {
-    if (isPlatformBrowser(this.platformId)) {
-      return window.location.origin;
-    }
-    
-    // Fallback to the configured redirect URL's origin
-    const config = environment.bungie.redirectConfig;
-    if (config) {
-      return `${config.protocol}://${config.host}${config.port ? `:${config.port}` : ''}`;
-    }
-    
-    // Last resort fallback
-    return 'https://localhost:4433';
-  }
-  
-  private getUserMemberships(token: string): void {
-    const headers = new HttpHeaders({
-      'Authorization': `Bearer ${token}`,
-      'X-API-Key': environment.bungie.apiKey
-    });
-  
-    this.http.get<any>(
-      `${environment.bungie.apiRoot}/User/GetMembershipsForCurrentUser/`, 
-      { headers }
-    ).subscribe({
-      next: (response) => {
-        try {
-          const data = response.Response;
-          
-          // Store membership info for later use (with platform check)
-          if (data.destinyMemberships && data.destinyMemberships.length > 0) {
-            const primaryMembership = data.destinyMemberships[0];
-            
-            if (isPlatformBrowser(this.platformId)) {
-              localStorage.setItem('membershipId', primaryMembership.membershipId);
-              localStorage.setItem('membershipType', primaryMembership.membershipType.toString());
-            }
-            
-            // Get characters for this membership
-            this.getCharacters(token, primaryMembership.membershipType, primaryMembership.membershipId);
-          } else {
-            this.loggingService.warn(
-              'CallbackComponent',
-              'No Destiny memberships found for user'
-            );
-            this.redirectToVault();
-          }
-        } catch (error) {
-          this.loggingService.error(
-            'CallbackComponent',
-            'Error processing user memberships data',
-            error,
-            'AUTH_MEMBERSHIP_PROCESSING_ERROR'
-          );
-          this.redirectToVault();
-        }
-      },
-      error: (err) => {
-        this.loggingService.error(
-          'CallbackComponent',
-          'Failed to retrieve user memberships',
-          err,
-          'AUTH_GET_MEMBERSHIPS_FAILED'
-        );
-        this.redirectToVault();
-      }
-    });
-  }
-  
-  private getCharacters(token: string, membershipType: number, membershipId: string): void {
-    const headers = new HttpHeaders({
-      'Authorization': `Bearer ${token}`,
-      'X-API-Key': environment.bungie.apiKey
-    });
-  
-    this.http.get<any>(
-      `${environment.bungie.apiRoot}/Destiny2/${membershipType}/Profile/${membershipId}/?components=200`,
-      { headers }
-    ).subscribe({
-      next: (response) => {
-        try {
-          const data = response.Response;
-          if (data.characters && data.characters.data) {
-            const characterIds = Object.keys(data.characters.data);
-            if (characterIds.length > 0) {
-              // Store the first character ID (with platform check)
-              if (isPlatformBrowser(this.platformId)) {
-                localStorage.setItem('characterId', characterIds[0]);
-              }
-              
-              this.loggingService.info(
-                'CallbackComponent',
-                'Successfully retrieved character information',
-                { characterCount: characterIds.length }
-              );
-            }
-          }
-        } catch (error) {
-          this.loggingService.error(
-            'CallbackComponent',
-            'Error processing character data',
-            error,
-            'AUTH_CHARACTER_PROCESSING_ERROR'
-          );
-        }
-        this.redirectToVault();
-      },
-      error: (err) => {
-        this.loggingService.error(
-          'CallbackComponent',
-          'Failed to retrieve character data',
-          err,
-          'AUTH_GET_CHARACTERS_FAILED'
-        );
-        this.redirectToVault();
-      }
-    });
-  }
-  
-  private redirectToVault(): void {
-    this.loggingService.info('CallbackComponent', 'Redirecting to vault page');
-    this.router.navigate(['/vault']);
   }
 }
 
