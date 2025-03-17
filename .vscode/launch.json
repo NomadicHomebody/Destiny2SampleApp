@@ -2,6 +2,65 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Debug Angular Browser",
+      "type": "chrome",
+      "request": "launch",
+      "preLaunchTask": "serve-ssr-for-debug",
+      "url": "https://localhost:4433",
+      "webRoot": "${workspaceFolder}/destiny-inventory-manager/",
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "webpack:///./src/*": "${workspaceFolder}/destiny-inventory-manager/src/*",
+        "webpack:///projects/*/src/*": "${workspaceFolder}/destiny-inventory-manager/src/*",
+        "webpack:///../src/*": "${workspaceFolder}/destiny-inventory-manager/src/*",
+        "webpack:///./~/*": "${workspaceFolder}/destiny-inventory-manager/node_modules/*",
+        "webpack:///*": "*",
+        "webpack:///src/*": "${workspaceFolder}/destiny-inventory-manager/src/*"
+      },
+      "runtimeArgs": [
+        "--disable-web-security",
+        "--allow-insecure-localhost"
+      ],
+      "userDataDir": "${workspaceFolder}/.vscode/chrome-debug-profile",
+      "smartStep": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/destiny-inventory-manager/**",
+        "!**/node_modules/**"
+      ]
+    },
+    {
+      "name": "Debug Angular Server",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "node",
+      "program": "${workspaceFolder}/destiny-inventory-manager/express-server.js",
+      "cwd": "${workspaceFolder}/destiny-inventory-manager",
+      "outFiles": [
+        "${workspaceFolder}/destiny-inventory-manager/dist/destiny-inventory-manager/**/*.mjs",
+        "${workspaceFolder}/destiny-inventory-manager/dist/destiny-inventory-manager/**/*.js"
+      ],
+      "sourceMaps": true,
+      "smartStep": true,
+      "restart": true,
+      "console": "integratedTerminal",
+      "env": {
+        "PORT": "4433",
+        "SSL_KEY": "C:/Users/jspin/Documents/Code/Destiny2SampleApp/destiny-inventory-manager/certs/cert.key",
+        "SSL_CERT": "C:/Users/jspin/Documents/Code/Destiny2SampleApp/destiny-inventory-manager/certs/cert.crt"
+      },
+      "preLaunchTask": "build-ssr"
+    },
+    {
+      "name": "Diagnose Angular SSR",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "node",
+      "program": "${workspaceFolder}/destiny-inventory-manager/server-debug.js",
+      "cwd": "${workspaceFolder}/destiny-inventory-manager",
+      "console": "integratedTerminal",
+      "preLaunchTask": "build-ssr"
+    },
+    {
       "name": "ng serve",
       "type": "chrome",
       "request": "launch",
@@ -14,37 +73,12 @@
       "request": "launch",
       "preLaunchTask": "npm: test",
       "url": "http://localhost:9876/debug.html"
-    },
+    }
+  ],
+  "compounds": [
     {
-      "type": "chrome",
-      "request": "launch",
-      "name": "Debug Angular Application",
-      "url": "https://localhost:4433",
-      "webRoot": "${workspaceFolder}/destiny-inventory-manager/",
-      "sourceMaps": true,
-      "sourceMapPathOverrides": {
-        "webpack:///./src/*": "${workspaceFolder}/destiny-inventory-manager/src/*",
-        "webpack:///src/*": "${workspaceFolder}/destiny-inventory-manager/src/*",
-        "webpack:///./*": "${workspaceFolder}/destiny-inventory-manager/*",
-        "webpack:///*": "*",
-        "./*": "${workspaceFolder}/destiny-inventory-manager/*"
-      },
-      "trace": false,
-      "userDataDir": "${workspaceFolder}/.vscode/chrome-debug-profile",
-      "runtimeArgs": [
-        // "--disable-web-security",
-        // "--allow-insecure-localhost"
-      ],
-      "preLaunchTask": "prepare-and-serve",
-      "smartStep": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/destiny-inventory-manager/**",
-        "!**/node_modules/**"
-      ],
-      "cascadeTerminateToConfigurations": [],
-      "pathMapping": {
-        "/": "${workspaceFolder}/destiny-inventory-manager/dist"
-      }
+      "name": "Debug Full Stack (Browser + Server)",
+      "configurations": ["Debug Angular Server", "Debug Angular Browser"]
     }
   ]
 }

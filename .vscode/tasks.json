@@ -38,49 +38,66 @@
       }
     },
     {
-      "label": "set-workspace-path",
+      "label": "build-ssr",
       "type": "shell",
-      "command": "echo",
-      "args": ["Setting workspace path for debugging..."],
-      "windows": {
-        "options": {
-          "env": {
-            "WORKSPACE_PATH": "${workspaceFolder}/destiny-inventory-manager/"
-          }
-        }
+      "command": "npm run build:ssr",
+      "options": {
+        "cwd": "${workspaceFolder}/destiny-inventory-manager"
       },
-      "linux": {
-        "options": {
-          "env": {
-            "WORKSPACE_PATH": "${workspaceFolder}/destiny-inventory-manager/"
-          }
-        }
-      },
-      "osx": {
-        "options": {
-          "env": {
-            "WORKSPACE_PATH": "${workspaceFolder}/destiny-inventory-manager/"
-          }
-        }
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "kill-angular-server",
+      "type": "shell",
+      "command": "npx kill-port 4433 9229 9230",
+      "options": {
+        "cwd": "${workspaceFolder}/destiny-inventory-manager"
       },
       "presentation": {
-        "reveal": "never",
-        "panel": "dedicated"
+        "reveal": "silent",
+        "panel": "shared"
       },
       "problemMatcher": []
     },
     {
-      "label": "prepare-and-serve",
+      "label": "diagnose-ssr",
       "type": "shell",
-      "command": "echo Starting Angular server...; npm run-script debug",
-      "isBackground": true,
+      "command": "node server-debug.js",
       "options": {
         "cwd": "${workspaceFolder}/destiny-inventory-manager",
-        "shell": {
-          "executable": "powershell.exe",
-          "args": ["-Command"]
+        "env": {
+          "PORT": "4433",
+          "DEBUG_PORT": "9230",
+          "SSL_KEY": "C:/Users/jspin/Documents/Code/Destiny2SampleApp/destiny-inventory-manager/certs/cert.key",
+          "SSL_CERT": "C:/Users/jspin/Documents/Code/Destiny2SampleApp/destiny-inventory-manager/certs/cert.crt"
         }
       },
+      "dependsOn": ["kill-angular-server", "build-ssr"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "serve-ssr-for-debug",
+      "type": "shell",
+      "command": "node express-server.js",
+      "options": {
+        "cwd": "${workspaceFolder}/destiny-inventory-manager",
+        "env": {
+          "PORT": "4433",
+          "SSL_KEY": "C:/Users/jspin/Documents/Code/Destiny2SampleApp/destiny-inventory-manager/certs/cert.key",
+          "SSL_CERT": "C:/Users/jspin/Documents/Code/Destiny2SampleApp/destiny-inventory-manager/certs/cert.crt"
+        }
+      },
+      "dependsOn": ["kill-angular-server", "build-ssr"],
+      "isBackground": true,
       "problemMatcher": {
         "owner": "angular",
         "pattern": {
@@ -91,18 +108,14 @@
         },
         "background": {
           "activeOnStart": true,
-          "beginsPattern": "Starting Angular server",
-          "endsPattern": "Application initialized"
+          "beginsPattern": "server",
+          "endsPattern": "listening"
         }
       },
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
         "clear": true
-      },
-      "group": {
-        "kind": "build",
-        "isDefault": false
       }
     }
   ]
