@@ -1,7 +1,6 @@
 import { NgModule, ErrorHandler } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
-import { AppComponent } from './app.component';
 import { AppRoutingModule } from './app-routing.module';
 
 // Import our error handling components
@@ -14,8 +13,7 @@ import { ApiKeyInterceptor } from './core/interceptors/api-key.interceptor';
   imports: [
     BrowserModule,
     HttpClientModule,
-    AppRoutingModule,
-    AppComponent
+    AppRoutingModule
   ],
   providers: [
     // Global error handler
@@ -35,6 +33,6 @@ import { ApiKeyInterceptor } from './core/interceptors/api-key.interceptor';
       multi: true
     }
   ],
-  bootstrap: [AppComponent]
+  bootstrap: []
 })
 export class AppModule { }

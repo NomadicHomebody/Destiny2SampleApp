@@ -29,18 +29,22 @@
         "webpack:///*": "*",
         "./*": "${workspaceFolder}/destiny-inventory-manager/*"
       },
-      "trace": true,
+      "trace": false,
       "userDataDir": "${workspaceFolder}/.vscode/chrome-debug-profile",
       "runtimeArgs": [
-        "--disable-web-security",
-        "--allow-insecure-localhost"
+        // "--disable-web-security",
+        // "--allow-insecure-localhost"
       ],
       "preLaunchTask": "prepare-and-serve",
       "smartStep": true,
       "resolveSourceMapLocations": [
         "${workspaceFolder}/destiny-inventory-manager/**",
         "!**/node_modules/**"
-      ]
+      ],
+      "cascadeTerminateToConfigurations": [],
+      "pathMapping": {
+        "/": "${workspaceFolder}/destiny-inventory-manager/dist"
+      }
     }
   ]
 }

@@ -3,7 +3,7 @@ const fs = require('fs');
 const dotenv = require('dotenv');
 
 // Load environment variables from .env file
-const result = dotenv.config();
+const result = dotenv.config({path: '../.vscode/.env'});
 
 if (result.error) {
   console.warn('No .env file found, using process.env variables only');

@@ -1,4 +1,5 @@
 {
+  // For more information, visit: https://go.microsoft.com/fwlink/?LinkId=733558
   "version": "2.0.0",
   "tasks": [
     {
@@ -45,21 +46,21 @@
       "windows": {
         "options": {
           "env": {
-            "WORKSPACE_PATH": "${workspaceFolder}/destiny-inventory-manager/"
+            "WORKSPACE_PATH": "${workspaceFolder}"
           }
         }
       },
       "linux": {
         "options": {
           "env": {
-            "WORKSPACE_PATH": "${workspaceFolder}/destiny-inventory-manager/"
+            "WORKSPACE_PATH": "${workspaceFolder}"
           }
         }
       },
       "osx": {
         "options": {
           "env": {
-            "WORKSPACE_PATH": "${workspaceFolder}/destiny-inventory-manager/"
+            "WORKSPACE_PATH": "${workspaceFolder}"
           }
         }
       },
@@ -70,39 +71,35 @@
       "problemMatcher": []
     },
     {
-      "label": "prepare-and-serve",
-      "type": "shell",
-      "command": "echo Starting Angular server...; npm run-script debug",
+      "label": "serve",
+      "type": "npm",
+      "script": "run debug",
       "isBackground": true,
-      "options": {
-        "cwd": "${workspaceFolder}/destiny-inventory-manager",
-        "shell": {
-          "executable": "powershell.exe",
-          "args": ["-Command"]
-        }
-      },
       "problemMatcher": {
-        "owner": "angular",
-        "pattern": {
-          "regexp": ".",
-          "file": 1,
-          "location": 2,
-          "message": 3
-        },
+        "owner": "typescript",
+        "pattern": "$tsc",
         "background": {
           "activeOnStart": true,
-          "beginsPattern": "Starting Angular server",
-          "endsPattern": "Application initialized"
+          "beginsPattern": "...",
+          "endsPattern": "..."
         }
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "clear": true
-      },
+      }
+    },
+    {
+      "label": "prepare-and-serve",
+      "dependsOn": ["set-workspace-path", "serve"],
+      "dependsOrder": "parallel", // Run tasks in sequence
       "group": {
         "kind": "build",
         "isDefault": false
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": true,
+        "echo": true
       }
     }
   ]
