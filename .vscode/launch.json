@@ -18,7 +18,7 @@
         "webpack:///src/*": "${workspaceFolder}/destiny-inventory-manager/src/*"
       },
       "runtimeArgs": [
-        "--disable-web-security",
+        // "--disable-web-security",
         "--allow-insecure-localhost"
       ],
       "userDataDir": "${workspaceFolder}/.vscode/chrome-debug-profile",
